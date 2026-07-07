@@ -1,4 +1,4 @@
---Variables Principales
+--Variables Principales del Script
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local TS = game:GetService("TeleportService")
@@ -11,13 +11,32 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VirtualUser = game:GetService("VirtualUser")
 local Settings = settings()
 
--- Anti AFK
+-- Anti AFK para evitar desconexion por inactividad
 LocalPlayer.Idled:Connect(function()
     VirtualUser:CaptureController()
     VirtualUser:ClickButton2(Vector2.new())
 end)
 
--- Optimizacion de Rendimiento y Ocultacion de Interfaz
+--Logica de Ocultar Mascotas Automatico en Segundo Plano
+task.spawn(function()
+    while task.wait(1) do
+        local currentPlayers = Players:GetPlayers()
+        for i = 1, #currentPlayers do
+            -- Proteccion individual para evitar que un error rompa el ciclo de los demas
+            pcall(function()
+                local playerTarget = currentPlayers[i]
+                local hidePets = playerTarget:FindFirstChild("hidePets")
+                if hidePets and hidePets:IsA("BoolValue") then
+                    if hidePets.Value == false then
+                        hidePets.Value = true
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+--Optimizacion de Rendimiento y Ocultacion de Interfaz
 local function cleanPart(v)
     if v:IsA("BasePart") or v:IsA("MeshPart") or v:IsA("UnionOperation") then
         v.Material = Enum.Material.Plastic
@@ -64,7 +83,7 @@ end
 for _, g in pairs(playerGui:GetDescendants()) do checkAndHideGui(g) end
 playerGui.DescendantAdded:Connect(checkAndHideGui)
 
--- Interfaz de Usuario
+--Interfaz de Usuario
 if playerGui:FindFirstChild("ApexKillGUI") then
     playerGui["ApexKillGUI"]:Destroy()
 end
@@ -88,9 +107,9 @@ title.Size = UDim2.new(0, 110, 0, 25)
 title.Position = UDim2.new(0, 10, 0, 8)
 title.BackgroundTransparency = 1
 title.AutoLocalize = false
-title.Text = "Apex Brawl Hop"
+title.Text = "Apex Kill"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.TextSize = 16
+title.TextSize = 18
 title.Font = Enum.Font.GothamBold
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.Parent = frame
@@ -141,7 +160,7 @@ killsLabel.TextXAlignment = Enum.TextXAlignment.Left
 killsLabel.Text = "0 (0K)"
 killsLabel.Parent = frame
 
--- Estadisticas y Cronometro
+--Estadisticas y Cronometro
 local function formatNumber(v)
     return tostring(v):reverse():gsub("%d%d%d", "%1,"):reverse():gsub("^,", "")
 end
@@ -185,23 +204,7 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- Logica para Ocultar Todas las Mascotas
--- Este sistema se ejecuta en segundo plano sin interfaz grafica
--- Funciona revisando cada 2 segundos para no generar lag
-task.spawn(function()
-    while task.wait(2) do
-        pcall(function()
-            for _, player in ipairs(Players:GetPlayers()) do
-                local hidePets = player:FindFirstChild("hidePets")
-                if hidePets and hidePets:IsA("BoolValue") and not hidePets.Value then
-                    hidePets.Value = true
-                end
-            end
-        end)
-    end
-end)
-
--- Funciones del Personaje
+--Funciones del Personaje
 local function getCharacter() 
     return LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait() 
 end
@@ -238,7 +241,41 @@ local function teleportToKing()
     bp.Parent = root
 end
 
--- Sistema de Combate y Animaciones
+--Server Hop para cambiar de servidor automaticamente
+local function ExecuteRealServerHop()
+    local nextCursor = ""
+    local serverFound = false
+    while not serverFound do
+        local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Desc&limit=100"
+        if nextCursor ~= "" then url = url .. "&cursor=" .. nextCursor end
+        local success, result = pcall(function() return game:HttpGet(url) end)
+        if success and result then
+            local decoded = HttpService:JSONDecode(result)
+            if decoded and decoded.data then
+                local list = decoded.data
+                for i = #list, 2, -1 do
+                    local j = math.random(i)
+                    list[i], list[j] = list[j], list[i]
+                end
+                for _, server in ipairs(list) do
+                    if server.id ~= game.JobId and server.playing and server.maxPlayers then
+                        if server.playing < server.maxPlayers and server.playing >= 5 then
+                            serverFound = true
+                            pcall(function() TS:TeleportToPlaceInstance(game.PlaceId, server.id, LocalPlayer) end)
+                            task.wait(2)
+                            if not serverFound then break end
+                        end
+                    end
+                end
+                if decoded.nextPageCursor then nextCursor = decoded.nextPageCursor else break end
+            else break end
+        else break end
+        task.wait(1)
+    end
+    if not serverFound then pcall(function() TS:Teleport(game.PlaceId, LocalPlayer) end) end
+end
+
+--Sistema de Combate y Animaciones
 local blockedAnimations = {
     ["rbxassetid://3638729053"] = true,
     ["rbxassetid://3638767427"] = true,
@@ -303,47 +340,13 @@ local function overrideToolActivation()
     end)
 end
 
--- Server Hop
-local function ExecuteRealServerHop()
-    local nextCursor = ""
-    local serverFound = false
-    while not serverFound do
-        local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Desc&limit=100"
-        if nextCursor ~= "" then url = url .. "&cursor=" .. nextCursor end
-        local success, result = pcall(function() return game:HttpGet(url) end)
-        if success and result then
-            local decoded = HttpService:JSONDecode(result)
-            if decoded and decoded.data then
-                local list = decoded.data
-                for i = #list, 2, -1 do
-                    local j = math.random(i)
-                    list[i], list[j] = list[j], list[i]
-                end
-                for _, server in ipairs(list) do
-                    if server.id ~= game.JobId and server.playing and server.maxPlayers then
-                        if server.playing < server.maxPlayers and server.playing >= 5 then
-                            serverFound = true
-                            pcall(function() TS:TeleportToPlaceInstance(game.PlaceId, server.id, LocalPlayer) end)
-                            task.wait(2)
-                            if not serverFound then break end
-                        end
-                    end
-                end
-                if decoded.nextPageCursor then nextCursor = decoded.nextPageCursor else break end
-            else break end
-        else break end
-        task.wait(1)
-    end
-    if not serverFound then pcall(function() TS:Teleport(game.PlaceId, LocalPlayer) end) end
-end
-
 local function initCharacter()
     task.wait(0.2)
     teleportToKing()
     setupAnimationBlocking()
     overrideToolActivation()
     
-    -- Detector de muerte
+    --Detector de muerte para hacer Server Hop automatico
     local char = LocalPlayer.Character
     if char then
         local humanoid = char:FindFirstChild("Humanoid")
@@ -360,7 +363,7 @@ LocalPlayer.CharacterAdded:Connect(function()
     initCharacter()
 end)
 
--- Funcion externa de dano optimizada para evitar lag de memoria (Garbage Collection)
+--Funcion externa segura para no causar problemas de memoria
 local function safeTouch(hand, root)
     firetouchinterest(hand, root, 1)
     firetouchinterest(hand, root, 0)
@@ -373,21 +376,17 @@ RunService.Heartbeat:Connect(function()
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("Humanoid") or char.Humanoid.Health <= 0 then return end
     
-    -- Checar tamano solo 2 veces por segundo (Ahorra muchisima CPU)
+    --Cambiamos el tamano solamente 2 veces por segundo para evitar mucho lag
     if tickCounter % 30 == 0 then
         applySize2()
     end
     
-    -- Loop de ataque optimizado para rodar cada 5 frames de forma ultra liviana
+    --Ataque optimizado que ocurre cada 5 fotogramas para recuperar el FPS maximo
     if tickCounter % 5 == 0 then
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if root then
-            root.CFrame = targetCFrame
-            root.Velocity = Vector3.zero
-        end
-        
+        stopAnimations(char.Humanoid)
         local punchInBackpack = LocalPlayer.Backpack:FindFirstChild("Punch")
         local punchInCharacter = char:FindFirstChild("Punch")
+        
         if punchInBackpack then
             punchInBackpack.Parent = char
             if punchInBackpack:FindFirstChild("attackTime") then punchInBackpack.attackTime.Value = 0 end
@@ -395,8 +394,8 @@ RunService.Heartbeat:Connect(function()
         if punchInCharacter then
             if punchInCharacter:FindFirstChild("attackTime") then punchInCharacter.attackTime.Value = 0 end
             punchInCharacter:Activate()
-            title.Text = "Em combate" -- Actualiza el texto de la GUI durante el combate
         end
+        
         local tool = char:FindFirstChildOfClass("Tool")
         if tool and (tool.Name:lower():find("punch") or tool.Name:lower():find("attack")) then
             pcall(tool.Activate, tool)
@@ -421,7 +420,7 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- Eventos Miscelaneos
+--Eventos Miscelaneos
 local toggled = true
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
@@ -474,4 +473,3 @@ task.spawn(function()
     task.wait(45)
     ExecuteRealServerHop()
 end)
-# TesteS
