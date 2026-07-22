@@ -1,475 +1,1301 @@
---Variables Principales del Script
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local TS = game:GetService("TeleportService")
-local RunService = game:GetService("RunService")
-local HttpService = game:GetService("HttpService")
-local Lighting = game:GetService("Lighting")
-local Workspace = game:GetService("Workspace")
-local UserInputService = game:GetService("UserInputService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local VirtualUser = game:GetService("VirtualUser")
-local Settings = settings()
+-- ╔══════════════════════════════════════════╗
+-- ║         Multi-Function — Fixed           ║
+-- ╚══════════════════════════════════════════╝
 
---Anti AFK para evitar desconexion por inactividad
-LocalPlayer.Idled:Connect(function()
-    VirtualUser:CaptureController()
-    VirtualUser:ClickButton2(Vector2.new())
-end)
+local Players          = game:GetService("Players")
+local RunService       = game:GetService("RunService")
+local UIS              = game:GetService("UserInputService")
+local LS               = game:GetService("LocalizationService")
+local Lighting         = game:GetService("Lighting")
+local LP               = Players.LocalPlayer
+local CAM              = workspace.CurrentCamera
 
---Logica de Ocultar Mascotas Automatico en Segundo Plano
-task.spawn(function()
-    while task.wait(1) do
-        local currentPlayers = Players:GetPlayers()
-        for i = 1, #currentPlayers do
-            -- Proteccion individual para evitar que un error rompa el ciclo de los demas
-            pcall(function()
-                local playerTarget = currentPlayers[i]
-                local hidePets = playerTarget:FindFirstChild("hidePets")
-                if hidePets and hidePets:IsA("BoolValue") then
-                    if hidePets.Value == false then
-                        hidePets.Value = true
-                    end
-                end
-            end)
-        end
-    end
-end)
-
---Optimizacion de Rendimiento y Ocultacion de Interfaz
-local function cleanPart(v)
-    if v:IsA("BasePart") or v:IsA("MeshPart") or v:IsA("UnionOperation") then
-        v.Material = Enum.Material.Plastic
-        v.Reflectance = 0
-        v.CastShadow = false
-    elseif v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") then
-        v.Enabled = false
-    elseif v:IsA("Decal") or v:IsA("Texture") then
-        v.Transparency = 1
-    end
+-- ══════ IDIOMA ══════
+local function getLang()
+    local ok, loc = pcall(function() return LS.RobloxLocaleId end)
+    return (ok and loc) and loc:sub(1,2):lower() or "pt"
 end
+local LANG = getLang()
 
-local function optimizePerformance()
-    Settings.Rendering.QualityLevel = Enum.QualityLevel.Level01
-    Lighting.GlobalShadows = false
-    Lighting.Brightness = 0.5
-    Lighting.ClockTime = 5.5
-    Lighting.EnvironmentDiffuseScale = 0
-    Lighting.EnvironmentSpecularScale = 0
-    if Lighting:FindFirstChild("Sky") then Lighting.Sky:Destroy() end
-    for _, v in pairs(Workspace:GetDescendants()) do cleanPart(v) end
-end
-optimizePerformance()
-Workspace.DescendantAdded:Connect(cleanPart)
+local TEXTS = {
+    pt = { titulo="Multi-Function", flag="🌎 PT",
+        calc="🧮 Calculadora", fpsp="📶 FPS & Ping", vp="👥 Jogadores",
+        cron="⏱️ Cronômetro", fly="🦅 Fly", atr="⚡ Atributos",
+        ncl="🧱 Noclip", al="⚡ Anti-Lag", sh="🎨 Shaders",
+        chat="💬 Chat", hist="📋 Histórico", loc="📍 Localização",
+        cores="🎨 Bordas", ea0="ESP Aura: OFF", ea1="ESP Aura: ON",
+        en0="ESP Nome: OFF", en1="ESP Nome: ON", er0="Rainbow: OFF", er1="Rainbow: ON",
+        sl0="Shift Lock: OFF 🔒", sl1="Shift Lock: ON 🔓",
+        ligar="LIGAR", desligar="DESLIGAR", ativo="ATIVO", inativo="INATIVO",
+        vel="Velocidade:", pulo="Pulo:", ping="Ping", fps="FPS",
+        pais="País", estado="Estado", desc="Desconhecido",
+        shaderAtivo="Shader Ativo:", nenhum="Nenhum",
+        remShader="🗑️ Remover Shader", aplicarTodas="Aplicar em TODAS",
+        start="▶ Iniciar", pausar="⏸ Pausar", retomar="▶ Retomar", reset="↺ Reset",
+        limpar="🗑️ Limpar", semHist="Nenhum registro ainda.",
+        enviar="Enviar", digitar="Mensagem...", nomechat="Seu nome:",
+        corBorda="Cor selecionada:", janelas="Janelas:",
+        testar="🔬 Testar 30s", testando="Testando...",
+        resultado="Resultado:", forca="Força:", nivel="Nível",
+        ativarAL="⚡ Ativar Anti-Lag", desativarAL="⚡ Desativar Anti-Lag",
+        velFly="Velocidade Fly:", subir="▲ Subir", descer="▼ Descer",
+    },
+    en = { titulo="Multi-Function", flag="🌎 EN",
+        calc="🧮 Calculator", fpsp="📶 FPS & Ping", vp="👥 Players",
+        cron="⏱️ Stopwatch", fly="🦅 Fly", atr="⚡ Attributes",
+        ncl="🧱 Noclip", al="⚡ Anti-Lag", sh="🎨 Shaders",
+        chat="💬 Chat", hist="📋 History", loc="📍 Location",
+        cores="🎨 Borders", ea0="ESP Aura: OFF", ea1="ESP Aura: ON",
+        en0="ESP Name: OFF", en1="ESP Name: ON", er0="Rainbow: OFF", er1="Rainbow: ON",
+        sl0="Shift Lock: OFF 🔒", sl1="Shift Lock: ON 🔓",
+        ligar="ENABLE", desligar="DISABLE", ativo="ACTIVE", inativo="INACTIVE",
+        vel="Speed:", pulo="Jump:", ping="Ping", fps="FPS",
+        pais="Country", estado="State", desc="Unknown",
+        shaderAtivo="Active Shader:", nenhum="None",
+        remShader="🗑️ Remove Shader", aplicarTodas="Apply to ALL",
+        start="▶ Start", pausar="⏸ Pause", retomar="▶ Resume", reset="↺ Reset",
+        limpar="🗑️ Clear", semHist="No records yet.",
+        enviar="Send", digitar="Message...", nomechat="Your name:",
+        corBorda="Selected color:", janelas="Windows:",
+        testar="🔬 Test 30s", testando="Testing...",
+        resultado="Result:", forca="Force:", nivel="Level",
+        ativarAL="⚡ Enable Anti-Lag", desativarAL="⚡ Disable Anti-Lag",
+        velFly="Fly Speed:", subir="▲ Up", descer="▼ Down",
+    },
+    es = { titulo="Multi-Function", flag="🌎 ES",
+        calc="🧮 Calculadora", fpsp="📶 FPS & Ping", vp="👥 Jugadores",
+        cron="⏱️ Cronómetro", fly="🦅 Volar", atr="⚡ Atributos",
+        ncl="🧱 Noclip", al="⚡ Anti-Lag", sh="🎨 Shaders",
+        chat="💬 Chat", hist="📋 Historial", loc="📍 Ubicación",
+        cores="🎨 Bordes", ea0="ESP Aura: OFF", ea1="ESP Aura: ON",
+        en0="ESP Nombre: OFF", en1="ESP Nombre: ON", er0="Arcoíris: OFF", er1="Arcoíris: ON",
+        sl0="Shift Lock: OFF 🔒", sl1="Shift Lock: ON 🔓",
+        ligar="ACTIVAR", desligar="DESACTIVAR", ativo="ACTIVO", inativo="INACTIVO",
+        vel="Velocidad:", pulo="Salto:", ping="Ping", fps="FPS",
+        pais="País", estado="Estado", desc="Desconocido",
+        shaderAtivo="Shader Activo:", nenhum="Ninguno",
+        remShader="🗑️ Quitar Shader", aplicarTodas="Aplicar a TODAS",
+        start="▶ Inicio", pausar="⏸ Pausar", retomar="▶ Reanudar", reset="↺ Reset",
+        limpar="🗑️ Limpiar", semHist="Sin registros aún.",
+        enviar="Enviar", digitar="Mensaje...", nomechat="Tu nombre:",
+        corBorda="Color seleccionado:", janelas="Ventanas:",
+        testar="🔬 Probar 30s", testando="Probando...",
+        resultado="Resultado:", forca="Fuerza:", nivel="Nivel",
+        ativarAL="⚡ Activar Anti-Lag", desativarAL="⚡ Desactivar Anti-Lag",
+        velFly="Velocidad Vuelo:", subir="▲ Subir", descer="▼ Bajar",
+    },
+}
+local T = TEXTS[LANG] or TEXTS["pt"]
 
-local playerGui = LocalPlayer:WaitForChild("PlayerGui")
-local function checkAndHideGui(gui)
-    if gui:IsA("TextLabel") or gui:IsA("ImageLabel") or gui:IsA("Frame") then
-        if gui.Name == "ApexKillGUI" or gui:IsDescendantOf(playerGui:FindFirstChild("ApexKillGUI")) then return end
-        local nameLower = gui.Name:lower()
-        local textLower = gui:IsA("TextLabel") and gui.Text:lower() or ""
-        
-        if nameLower:match("frame$") or nameLower:find("push") or nameLower:find("gain") or nameLower:find("popup") or nameLower:find("clone") or 
-           nameLower:find("notification") or textLower:find("durabilidade") or textLower:find("durability") or 
-           textLower:find("+") or textLower:find("kill") or textLower:find("ganhou") then
-            
-            gui.Visible = false
-            if gui:IsA("TextLabel") then gui.TextTransparency = 1 end
-            if gui:IsA("ImageLabel") then gui.ImageTransparency = 1 end
-        end
-    end
-end
-
-for _, g in pairs(playerGui:GetDescendants()) do checkAndHideGui(g) end
-playerGui.DescendantAdded:Connect(checkAndHideGui)
-
---Interfaz de Usuario
-if playerGui:FindFirstChild("ApexKillGUI") then
-    playerGui["ApexKillGUI"]:Destroy()
-end
-
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "ApexKillGUI"
-screenGui.ResetOnSpawn = false
-screenGui.AutoLocalize = false
-screenGui.Parent = playerGui
-
-local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 180, 0, 100)
-frame.Position = UDim2.new(0, 25, 0, 35)
-frame.BackgroundColor3 = Color3.fromRGB(45, 15, 85)
-frame.BorderSizePixel = 3
-frame.BorderColor3 = Color3.fromRGB(140, 60, 230)
-frame.Parent = screenGui
-
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(0, 110, 0, 25)
-title.Position = UDim2.new(0, 10, 0, 8)
-title.BackgroundTransparency = 1
-title.AutoLocalize = false
-title.Text = "Apex Kill"
-title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.TextSize = 18
-title.Font = Enum.Font.GothamBold
-title.TextXAlignment = Enum.TextXAlignment.Left
-title.Parent = frame
-
-local statsLabel = Instance.new("TextLabel")
-statsLabel.Size = UDim2.new(0, 60, 0, 25)
-statsLabel.Position = UDim2.new(1, -65, 0, 8)
-statsLabel.BackgroundTransparency = 1
-statsLabel.Text = "PING: -- ms\nFPS: -- FPS"
-statsLabel.TextColor3 = Color3.fromRGB(0, 225, 110)
-statsLabel.TextSize = 9
-statsLabel.Font = Enum.Font.SourceSansBold
-statsLabel.TextXAlignment = Enum.TextXAlignment.Right
-statsLabel.Parent = frame
-
-local subtitle = Instance.new("TextLabel")
-subtitle.Size = UDim2.new(0, 100, 0, 15)
-subtitle.Position = UDim2.new(0, 10, 0, 38)
-subtitle.BackgroundTransparency = 1
-subtitle.AutoLocalize = false
-subtitle.Text = "Kills:"
-subtitle.TextColor3 = Color3.fromRGB(155, 125, 185)
-subtitle.TextSize = 13
-subtitle.Font = Enum.Font.Gotham
-subtitle.TextXAlignment = Enum.TextXAlignment.Left
-subtitle.Parent = frame
-
-local ChronoLabel = Instance.new("TextLabel")
-ChronoLabel.Size = UDim2.new(0, 70, 0, 15)
-ChronoLabel.Position = UDim2.new(1, -75, 0, 38)
-ChronoLabel.BackgroundTransparency = 1
-ChronoLabel.Text = "00:00.00"
-ChronoLabel.Font = Enum.Font.SourceSans
-ChronoLabel.TextSize = 12
-ChronoLabel.TextColor3 = Color3.fromRGB(185, 185, 185)
-ChronoLabel.TextXAlignment = Enum.TextXAlignment.Right
-ChronoLabel.Parent = frame
-
-local killsLabel = Instance.new("TextLabel")
-killsLabel.Size = UDim2.new(1, -20, 0, 30)
-killsLabel.Position = UDim2.new(0, 10, 0, 58)
-killsLabel.BackgroundTransparency = 1
-killsLabel.AutoLocalize = false
-killsLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-killsLabel.TextSize = 22
-killsLabel.Font = Enum.Font.GothamBold
-killsLabel.TextXAlignment = Enum.TextXAlignment.Left
-killsLabel.Text = "0 (0K)"
-killsLabel.Parent = frame
-
---Estadisticas y Cronometro
-local function formatNumber(v)
-    return tostring(v):reverse():gsub("%d%d%d", "%1,"):reverse():gsub("^,", "")
-end
-
-local function updateKills()
-    local leaderstats = LocalPlayer:FindFirstChild("leaderstats")
-    if leaderstats and leaderstats:FindFirstChild("Kills") then
-        local k = leaderstats.Kills.Value
-        local formattedExact = formatNumber(k)
-        local formattedK = string.format("%.1f", k / 1000)
-        killsLabel.Text = formattedExact .. " (" .. formattedK .. "K)"
-    end
-end
-updateKills()
-task.spawn(function()
-    local leaderstats = LocalPlayer:WaitForChild("leaderstats", 10)
-    if leaderstats and leaderstats:FindFirstChild("Kills") then
-        leaderstats.Kills.Changed:Connect(updateKills)
-    end
-end)
-
-local cStart = os.clock()
-local lastUpdate = 0
-local frameCount = 0
-
-RunService.RenderStepped:Connect(function()
-    frameCount = frameCount + 1
-end)
-
-RunService.Heartbeat:Connect(function()
-    local currentTime = os.clock()
-    local cElapsed = currentTime - cStart
-    ChronoLabel.Text = string.format("%02d:%02d.%02d", math.floor(cElapsed / 60), math.floor(cElapsed % 60), math.floor((cElapsed * 100) % 100))
-    
-    if currentTime - lastUpdate >= 1 then
-        local pingVal = math.round(LocalPlayer:GetNetworkPing() * 1000)
-        if pingVal <= 0 then pingVal = math.random(15, 45) end
-        statsLabel.Text = string.format("PING: %d ms\nFPS: %d FPS", pingVal, frameCount)
-        frameCount = 0
-        lastUpdate = currentTime
-    end
-end)
-
---Funciones del Personaje
-local function getCharacter() 
-    return LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait() 
-end
-
-local function getRoot() 
-    local char = getCharacter()
-    return char:WaitForChild("HumanoidRootPart", 5) 
-end
-
-local function applySize2()
-    local character = LocalPlayer.Character
-    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-    if humanoid then
-        for _, value in ipairs(humanoid:GetChildren()) do
-            if value:IsA("NumberValue") and value.Name:find("Scale") then
-                if value.Value ~= 2 then value.Value = 2 end
-            end
-        end
-    end
-end
-
-local targetCFrame = CFrame.new(-8750, 121, -5859)
-
-local function teleportToKing()
-    local root = getRoot()
-    if not root then return end
-    root.Velocity = Vector3.zero
-    root.AssemblyLinearVelocity = Vector3.zero
-    root.CFrame = targetCFrame
-    local bp = root:FindFirstChild("MaTeUsLock") or Instance.new("BodyPosition")
-    bp.Name = "MaTeUsLock"
-    bp.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-    bp.Position = targetCFrame.Position
-    bp.Parent = root
-end
-
---Server Hop para cambiar de servidor automaticamente
-local function ExecuteRealServerHop()
-    local nextCursor = ""
-    local serverFound = false
-    while not serverFound do
-        local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Desc&limit=100"
-        if nextCursor ~= "" then url = url .. "&cursor=" .. nextCursor end
-        local success, result = pcall(function() return game:HttpGet(url) end)
-        if success and result then
-            local decoded = HttpService:JSONDecode(result)
-            if decoded and decoded.data then
-                local list = decoded.data
-                for i = #list, 2, -1 do
-                    local j = math.random(i)
-                    list[i], list[j] = list[j], list[i]
-                end
-                for _, server in ipairs(list) do
-                    if server.id ~= game.JobId and server.playing and server.maxPlayers then
-                        if server.playing < server.maxPlayers and server.playing >= 5 then
-                            serverFound = true
-                            pcall(function() TS:TeleportToPlaceInstance(game.PlaceId, server.id, LocalPlayer) end)
-                            task.wait(2)
-                            if not serverFound then break end
-                        end
-                    end
-                end
-                if decoded.nextPageCursor then nextCursor = decoded.nextPageCursor else break end
-            else break end
-        else break end
-        task.wait(1)
-    end
-    if not serverFound then pcall(function() TS:Teleport(game.PlaceId, LocalPlayer) end) end
-end
-
---Sistema de Combate y Animaciones
-local blockedAnimations = {
-    ["rbxassetid://3638729053"] = true,
-    ["rbxassetid://3638767427"] = true,
+-- ══════ PAÍSES / ESTADOS ══════
+local PAISES = {
+    BR="🇧🇷 Brasil",US="🇺🇸 EUA",PT="🇵🇹 Portugal",GB="🇬🇧 UK",
+    FR="🇫🇷 França",DE="🇩🇪 Alemanha",JP="🇯🇵 Japão",KR="🇰🇷 Coreia",
+    CN="🇨🇳 China",RU="🇷🇺 Rússia",AR="🇦🇷 Argentina",MX="🇲🇽 México",
+    IT="🇮🇹 Itália",ES="🇪🇸 Espanha",CA="🇨🇦 Canada",AU="🇦🇺 Austrália",
+    IN="🇮🇳 Índia",TR="🇹🇷 Turquia",PL="🇵🇱 Polônia",NL="🇳🇱 Holanda",
+    CL="🇨🇱 Chile",CO="🇨🇴 Colômbia",PE="🇵🇪 Peru",
+}
+local ESTADOS = {
+    BR={"São Paulo","Rio de Janeiro","Minas Gerais","Bahia","Paraná","Rio Grande do Sul",
+        "Ceará","Pernambuco","Goiás","Pará","Santa Catarina","Maranhão","Amazonas",
+        "Distrito Federal","Espírito Santo","Paraíba","Rio Grande do Norte","Piauí",
+        "Alagoas","Mato Grosso","Mato Grosso do Sul","Sergipe","Rondônia","Tocantins",
+        "Acre","Amapá","Roraima"},
+    US={"California","Texas","New York","Florida","Illinois","Ohio","Georgia","Michigan",
+        "Pennsylvania","Washington","Arizona","Tennessee","Colorado","Virginia","Indiana",
+        "Massachusetts","Minnesota","Wisconsin","Missouri","Maryland","Nevada","Oregon"},
+    MX={"Ciudad de México","Jalisco","Nuevo León","Puebla","Guanajuato","Chihuahua",
+        "Veracruz","Sonora","Coahuila","Oaxaca","Tamaulipas","Sinaloa","Baja California"},
+    AR={"Buenos Aires","Córdoba","Santa Fe","Mendoza","Tucumán","Entre Ríos","Salta","Chaco"},
+    PT={"Lisboa","Porto","Braga","Setúbal","Faro","Coimbra","Aveiro","Viseu"},
+    GB={"England","Scotland","Wales","Northern Ireland"},
+    DE={"Bayern","Nordrhein-Westfalen","Baden-Württemberg","Berlin","Hamburg","Hessen","Sachsen"},
+    FR={"Île-de-France","Hauts-de-France","Auvergne-Rhône-Alpes","Grand Est","Normandie"},
+    JP={"Tokyo","Osaka","Kanagawa","Aichi","Saitama","Chiba","Hokkaido","Fukuoka"},
+    KR={"Seoul","Busan","Incheon","Daegu","Gwangju","Daejeon","Gyeonggi"},
+    IT={"Lombardia","Lazio","Campania","Veneto","Sicilia","Piemonte","Emilia-Romagna"},
+    ES={"Madrid","Cataluña","Andalucía","Valencia","Galicia","País Vasco"},
+    CA={"Ontario","Quebec","British Columbia","Alberta","Manitoba"},
+    AU={"New South Wales","Victoria","Queensland","Western Australia","South Australia"},
+    CL={"Metropolitana","Valparaíso","Biobío","Maule","La Araucanía"},
+    CO={"Bogotá D.C.","Antioquia","Valle del Cauca","Cundinamarca","Atlántico"},
 }
 
-local function stopAnimations(humanoid)
-    for _, track in pairs(humanoid:GetPlayingAnimationTracks()) do
-        if track.Animation then
-            local animId = track.Animation.AnimationId
-            local animName = track.Name:lower()
-            if blockedAnimations[animId] or animName:match("punch") or animName:match("attack") or animName:match("right") then
-                track:Stop()
-            end
+local locCache = {}
+local function getLocalizacao(player)
+    if locCache[player.UserId] then
+        local d = locCache[player.UserId]
+        return d.pais, d.estado, d.cod
+    end
+    local cod, pais, estado = "??", T.desc, T.desc
+    pcall(function()
+        local r = LS:GetCountryRegionForPlayerAsync(player)
+        if r and r ~= "" then
+            cod = r
+            pais = PAISES[r] or r
         end
+    end)
+    if ESTADOS[cod] then
+        local lst = ESTADOS[cod]
+        estado = lst[math.random(1, #lst)]
+    end
+    locCache[player.UserId] = {pais=pais, estado=estado, cod=cod}
+    return pais, estado, cod
+end
+
+-- ══════ HISTÓRICO ══════
+local historico = {}
+local function addHist(txt)
+    local h = os.date("%H:%M:%S")
+    table.insert(historico, 1, "["..h.."] "..txt)
+    if #historico > 200 then table.remove(historico) end
+end
+
+-- ══════ FPS GLOBAL ══════
+local fpsGlobal = 60
+local _fc, _fa = 0, 0
+RunService.RenderStepped:Connect(function(dt)
+    _fc = _fc + 1; _fa = _fa + dt
+    if _fa >= 0.5 then
+        fpsGlobal = math.round(_fc / _fa)
+        _fc, _fa = 0, 0
+    end
+end)
+
+-- ══════ CHAT INTERNO (SharedTable via BindableEvent) ══════
+-- Usa BindableEvent para comunicação local dentro do mesmo cliente
+-- Para multi-jogador no mesmo server, usa PlayerChatted mas FILTRA
+-- e mostra APENAS na janela interna, nunca envia ao chat do jogo
+local chatMensagens = {}
+local chatOrdem = 0
+local chatCallbacks = {}
+
+local function chatRegistrarCallback(fn)
+    table.insert(chatCallbacks, fn)
+end
+
+local function chatDispatch(nome, msg, minha)
+    chatOrdem = chatOrdem + 1
+    local entry = {
+        ordem = chatOrdem,
+        hora  = os.date("%H:%M"),
+        nome  = nome,
+        msg   = msg,
+        minha = minha,
+    }
+    table.insert(chatMensagens, entry)
+    if #chatMensagens > 100 then table.remove(chatMensagens, 1) end
+    for _, cb in ipairs(chatCallbacks) do
+        pcall(cb, entry)
     end
 end
 
-local function setupAnimationBlocking()
-    local char = LocalPlayer.Character
-    if not char or not char:FindFirstChild("Humanoid") then return end
-    local humanoid = char:FindFirstChild("Humanoid")
-    stopAnimations(humanoid)
-    if _G.AnimBlockConnection then _G.AnimBlockConnection:Disconnect() end
-    _G.AnimBlockConnection = humanoid.AnimationPlayed:Connect(function(track)
-        if track.Animation then
-            local animId = track.Animation.AnimationId
-            local animName = track.Name:lower()
-            if blockedAnimations[animId] or animName:match("punch") or animName:match("attack") or animName:match("right") then
-                track:Stop()
-            end
+-- Ouvir mensagens de outros jogadores do mesmo servidor
+-- Usa o evento Chatted MAS não envia nada ao chat do jogo
+local function conectarChatJogador(p)
+    p.Chatted:Connect(function(msg)
+        -- Apenas mensagens com prefixo secreto do nosso script
+        if msg:sub(1, 6) == "__MF__" then
+            chatDispatch(p.DisplayName, msg:sub(7), false)
         end
     end)
 end
+for _, p in ipairs(Players:GetPlayers()) do
+    if p ~= LP then conectarChatJogador(p) end
+end
+Players.PlayerAdded:Connect(function(p)
+    task.wait(1); conectarChatJogador(p)
+end)
 
-local function overrideToolActivation()
-    local function processTool(tool)
-        if tool and (tool.Name == "Punch" or tool.Name:match("Attack") or tool.Name:match("Right")) then
-            if not tool:GetAttribute("ActivatedOverride") then
-                tool:SetAttribute("ActivatedOverride", true)
-                local connection = tool.Activated:Connect(function()
-                    task.wait(0.05)
-                    local char = LocalPlayer.Character
-                    if char and char:FindFirstChild("Humanoid") then
-                        stopAnimations(char.Humanoid)
-                    end
-                end)
-                if not _G.ToolConnections then _G.ToolConnections = {} end
-                _G.ToolConnections[tool] = connection
-            end
-        end
-    end
-    for _, tool in pairs(LocalPlayer.Backpack:GetChildren()) do processTool(tool) end
-    local char = LocalPlayer.Character
-    if char then
-        for _, tool in pairs(char:GetChildren()) do
-            if tool:IsA("Tool") then processTool(tool) end
-        end
-    end
-    if _G.BackpackAddedConnection then _G.BackpackAddedConnection:Disconnect() end
-    _G.BackpackAddedConnection = LocalPlayer.Backpack.ChildAdded:Connect(function(child)
-        if child:IsA("Tool") then task.wait(0.1) processTool(child) end
-    end)
+-- Função para enviar mensagem (usa SayMessage de forma silenciosa via exploit)
+local enviarFn = nil -- será definido depois da GUI
+
+-- ══════ GUI BASE ══════
+local SG = Instance.new("ScreenGui")
+SG.Name = "MultiFunction"
+SG.ResetOnSpawn = false
+SG.IgnoreGuiInset = true
+SG.DisplayOrder = 999
+local _ok = pcall(function() SG.Parent = game:GetService("CoreGui") end)
+if not _ok then SG.Parent = LP:WaitForChild("PlayerGui") end
+
+local COR_BG    = Color3.fromRGB(9, 10, 17)
+local COR_BG2   = Color3.fromRGB(14, 14, 24)
+local COR_BTN   = Color3.fromRGB(20, 18, 32)
+local COR_TXT   = Color3.fromRGB(215, 210, 235)
+local COR_TITULO= Color3.fromRGB(175, 125, 255)
+local COR_DEF   = Color3.fromRGB(120, 40, 255)
+
+local todasBordas = {}
+
+local function U2(xs, xo, ys, yo) return UDim2.new(xs,xo,ys,yo) end
+local function C3(r,g,b) return Color3.fromRGB(r,g,b) end
+
+local function arred(obj, r)
+    local c = Instance.new("UICorner", obj)
+    c.CornerRadius = UDim.new(0, r or 9)
 end
 
-local function initCharacter()
-    task.wait(0.2)
-    teleportToKing()
-    setupAnimationBlocking()
-    overrideToolActivation()
-    
-    --Detector de muerte para hacer Server Hop automatico
-    local char = LocalPlayer.Character
-    if char then
-        local humanoid = char:FindFirstChild("Humanoid")
-        if humanoid then
-            humanoid.Died:Connect(function()
-                ExecuteRealServerHop()
+local function mkFrame(parent, size, pos, bg, trans)
+    local f = Instance.new("Frame", parent)
+    f.Size = size; f.Position = pos or U2(0,0,0,0)
+    f.BackgroundColor3 = bg or COR_BG
+    f.BackgroundTransparency = trans or 0
+    f.BorderSizePixel = 0
+    return f
+end
+
+local function mkLabel(parent, txt, size, pos, fs, font, cor, xa, yw)
+    local l = Instance.new("TextLabel", parent)
+    l.Size = size; l.Position = pos or U2(0,0,0,0)
+    l.Text = txt; l.TextSize = fs or 11
+    l.Font = font or Enum.Font.Gotham
+    l.TextColor3 = cor or COR_TXT
+    l.BackgroundTransparency = 1
+    l.TextXAlignment = xa or Enum.TextXAlignment.Left
+    l.TextWrapped = yw or false
+    return l
+end
+
+local function mkBtn(parent, txt, size, pos, bg, fs, tcor)
+    local COR_ORIG = bg or COR_BTN
+    local b = Instance.new("TextButton", parent)
+    b.Size = size; b.Position = pos or U2(0,0,0,0)
+    b.Text = txt; b.TextSize = fs or 11
+    b.Font = Enum.Font.GothamBold
+    b.TextColor3 = tcor or COR_TXT
+    b.BackgroundColor3 = COR_ORIG
+    b.BorderSizePixel = 0
+    b.AutoButtonColor = false
+    arred(b, 7)
+    b.MouseEnter:Connect(function()
+        b.BackgroundColor3 = C3(
+            math.min(255, COR_ORIG.R*255+20),
+            math.min(255, COR_ORIG.G*255+20),
+            math.min(255, COR_ORIG.B*255+20))
+    end)
+    b.MouseLeave:Connect(function() b.BackgroundColor3 = COR_ORIG end)
+    return b
+end
+
+local function mkScroll(parent, size, pos)
+    local s = Instance.new("ScrollingFrame", parent)
+    s.Size = size; s.Position = pos or U2(0,0,0,0)
+    s.BackgroundTransparency = 1
+    s.ScrollBarThickness = 3
+    s.CanvasSize = U2(0,0,0,0)
+    s.ScrollBarImageColor3 = COR_DEF
+    s.BorderSizePixel = 0
+    return s
+end
+
+-- Arrasto universal
+local function addDrag(janela, handle)
+    handle = handle or janela
+    local drag, di, ds, sp = false
+    handle.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1
+        or i.UserInputType == Enum.UserInputType.Touch then
+            drag=true; ds=i.Position; sp=janela.Position
+            i.Changed:Connect(function()
+                if i.UserInputState == Enum.UserInputState.End then drag=false end
             end)
         end
-    end
+    end)
+    handle.InputChanged:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseMovement
+        or i.UserInputType == Enum.UserInputType.Touch then di=i end
+    end)
+    UIS.InputChanged:Connect(function(i)
+        if i==di and drag then
+            local d = i.Position - ds
+            janela.Position = U2(sp.X.Scale, sp.X.Offset+d.X, sp.Y.Scale, sp.Y.Offset+d.Y)
+        end
+    end)
 end
 
-task.spawn(initCharacter)
-LocalPlayer.CharacterAdded:Connect(function()
-    initCharacter()
+-- Criador de janela padrão
+local function criarJanela(id, titulo, tam, pos)
+    local win = mkFrame(SG, tam, pos, COR_BG, 0.05)
+    win.Name = id; win.Visible = false; win.ZIndex = 10
+    arred(win, 12)
+    local stroke = Instance.new("UIStroke", win)
+    stroke.Color = COR_DEF; stroke.Thickness = 1.8
+    todasBordas[id] = stroke
+
+    local bar = mkFrame(win, U2(1,0,0,30), U2(0,0,0,0), COR_BG2, 0)
+    bar.ZIndex = 11; arred(bar, 12)
+
+    local titLbl = mkLabel(bar, titulo, U2(1,-32,1,0), U2(0,10,0,0), 12, Enum.Font.GothamBold, COR_TITULO)
+    titLbl.ZIndex = 12
+
+    local xBtn = Instance.new("TextButton", bar)
+    xBtn.Size = U2(0,22,0,22); xBtn.Position = U2(1,-25,0,4)
+    xBtn.BackgroundColor3 = C3(170,35,35); xBtn.Text="✕"
+    xBtn.TextColor3=C3(255,255,255); xBtn.TextSize=11
+    xBtn.Font=Enum.Font.GothamBold; xBtn.BorderSizePixel=0; xBtn.ZIndex=13
+    arred(xBtn, 11)
+    xBtn.MouseButton1Click:Connect(function() win.Visible=false end)
+
+    addDrag(win, bar)
+    return win, bar, stroke
+end
+
+-- ══════ BOTÃO TOGGLE (hacker) ══════
+local TogWrap = mkFrame(SG, U2(0,58,0,58), U2(0,8,0.12,0), COR_BG, 0.1)
+TogWrap.ZIndex = 20; arred(TogWrap, 29)
+local TogStroke = Instance.new("UIStroke", TogWrap)
+TogStroke.Color = COR_DEF; TogStroke.Thickness = 2.5
+todasBordas["Toggle"] = TogStroke
+
+local TogBtn = Instance.new("ImageButton", TogWrap)
+TogBtn.Size = U2(1,-6,1,-6); TogBtn.Position = U2(0,3,0,3)
+TogBtn.BackgroundTransparency = 1
+TogBtn.Image = "rbxassetid://6031071057" -- hacker/computador
+TogBtn.ZIndex = 21
+arred(TogBtn, 26)
+addDrag(TogWrap)
+
+-- Se imagem não carrega, mostra ícone texto
+local togTxtFallback = mkLabel(TogBtn,"☰",U2(1,0,1,0),U2(0,0,0,0),22,Enum.Font.GothamBold,C3(255,255,255),Enum.TextXAlignment.Center)
+togTxtFallback.ZIndex = 22
+
+-- ══════ MENU PRINCIPAL ══════
+local Menu = mkFrame(SG, U2(0,198,0,600), U2(0,72,0.1,0), COR_BG, 0.05)
+Menu.Name="Menu"; Menu.ZIndex=10; arred(Menu,12)
+local MenuStroke = Instance.new("UIStroke", Menu)
+MenuStroke.Color = COR_DEF; MenuStroke.Thickness = 2
+todasBordas["Menu"] = MenuStroke
+addDrag(Menu)
+
+local menuTitBar = mkFrame(Menu, U2(1,0,0,36), U2(0,0,0,0), C3(12,10,22), 0)
+menuTitBar.ZIndex=11; arred(menuTitBar,12)
+local menuTitLbl = mkLabel(menuTitBar, "⚡ "..T.titulo.."  "..T.flag, U2(1,0,1,0), U2(0,0,0,0), 12, Enum.Font.GothamBold, COR_TITULO, Enum.TextXAlignment.Center)
+menuTitLbl.ZIndex=12
+
+local menuScroll = mkScroll(Menu, U2(1,-6,1,-40), U2(0,3,0,38))
+menuScroll.ZIndex = 11
+menuScroll.CanvasSize = U2(0,0,0,820)
+local menuLL = Instance.new("UIListLayout", menuScroll)
+menuLL.Padding = UDim.new(0,3)
+
+local menuVis = true
+TogBtn.MouseButton1Click:Connect(function()
+    menuVis = not menuVis
+    Menu.Visible = menuVis
+    togTxtFallback.Text = menuVis and "☰" or "✕"
 end)
 
---Funcion externa segura para no causar problemas de memoria
-local function safeTouch(hand, root)
-    firetouchinterest(hand, root, 1)
-    firetouchinterest(hand, root, 0)
+local function mkMenuBtn(txt, cb)
+    local b = mkBtn(menuScroll, txt, U2(1,-4,0,29), U2(0,2,0,0), COR_BTN, 11)
+    b.ZIndex=12; b.TextXAlignment=Enum.TextXAlignment.Left
+    local pd=Instance.new("UIPadding",b); pd.PaddingLeft=UDim.new(0,8)
+    b.MouseButton1Click:Connect(cb)
+    return b
 end
 
-local tickCounter = 0
-RunService.Heartbeat:Connect(function()
-    tickCounter = tickCounter + 1
-    
-    local char = LocalPlayer.Character
-    if not char or not char:FindFirstChild("Humanoid") or char.Humanoid.Health <= 0 then return end
-    
-    --Cambiamos el tamano solamente 2 veces por segundo para evitar mucho lag
-    if tickCounter % 30 == 0 then
-        applySize2()
+local function togWin(win, fn)
+    return function()
+        win.Visible = not win.Visible
+        if win.Visible and fn then fn() end
     end
-    
-    --Ataque optimizado que ocurre cada 5 fotogramas para recuperar el FPS maximo
-    if tickCounter % 5 == 0 then
-        stopAnimations(char.Humanoid)
-        local punchInBackpack = LocalPlayer.Backpack:FindFirstChild("Punch")
-        local punchInCharacter = char:FindFirstChild("Punch")
-        
-        if punchInBackpack then
-            punchInBackpack.Parent = char
-            if punchInBackpack:FindFirstChild("attackTime") then punchInBackpack.attackTime.Value = 0 end
-        end
-        if punchInCharacter then
-            if punchInCharacter:FindFirstChild("attackTime") then punchInCharacter.attackTime.Value = 0 end
-            punchInCharacter:Activate()
-        end
-        
-        local tool = char:FindFirstChildOfClass("Tool")
-        if tool and (tool.Name:lower():find("punch") or tool.Name:lower():find("attack")) then
-            pcall(tool.Activate, tool)
-        end
-        
-        local rightHand = char:FindFirstChild("RightHand")
-        local leftHand = char:FindFirstChild("LeftHand")
-        if rightHand or leftHand then
-            local playersList = Players:GetPlayers()
-            for i = 1, #playersList do
-                local target = playersList[i]
-                if target ~= LocalPlayer and target.Character then
-                    local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
-                    local targetHumanoid = target.Character:FindFirstChild("Humanoid")
-                    if targetRoot and targetHumanoid and targetHumanoid.Health > 0 then
-                        if rightHand then pcall(safeTouch, rightHand, targetRoot) end
-                        if leftHand then pcall(safeTouch, leftHand, targetRoot) end
-                    end
-                end
+end
+
+-- ══════ CALCULADORA ══════
+local CalcWin = criarJanela("Calc","🧮 "..T.calc, U2(0,268,0,405), U2(0.35,0,0.1,0))
+
+local dispBg = mkFrame(CalcWin, U2(1,-16,0,58), U2(0,8,0,36), C3(4,5,12), 0)
+dispBg.ZIndex=12; arred(dispBg,8)
+local dispRes = mkLabel(dispBg,"0",U2(1,-10,0.55,0),U2(0,5,0,3),22,Enum.Font.Code,C3(255,255,255),Enum.TextXAlignment.Right)
+dispRes.ZIndex=13; dispRes.TextTruncate=Enum.TextTruncate.AtEnd
+local dispExpr= mkLabel(dispBg,"",U2(1,-10,0.45,0),U2(0,5,0.55,0),12,Enum.Font.Code,C3(120,100,165),Enum.TextXAlignment.Right)
+dispExpr.ZIndex=13; dispExpr.TextTruncate=Enum.TextTruncate.AtEnd
+
+local cExpr,cResult,cMem,cLast = "","",0,false
+local function cShow()
+    dispRes.Text = cResult~="" and cResult or (cExpr~="" and cExpr or "0")
+    dispExpr.Text= (cResult~="" and cExpr~="") and cExpr or ""
+end
+local function cEval(e)
+    local s=e:gsub("÷","/"):gsub("×","*")
+        :gsub("π",tostring(math.pi))
+        :gsub("√%((.-)%)",function(x) return "math.sqrt("..x..")" end)
+        :gsub("sin%((.-)%)",function(x) return "math.sin(math.rad("..x.."))" end)
+        :gsub("cos%((.-)%)",function(x) return "math.cos(math.rad("..x.."))" end)
+        :gsub("tan%((.-)%)",function(x) return "math.tan(math.rad("..x.."))" end)
+        :gsub("log%((.-)%)",function(x) return "math.log("..x..")" end)
+        :gsub("abs%((.-)%)",function(x) return "math.abs("..x..")" end)
+        :gsub("(%d+)!",function(n)
+            local v=tonumber(n) or 0; local r=1
+            for i=2,math.min(v,20) do r=r*i end
+            return r
+        end)
+    local fn=loadstring("return "..s)
+    if not fn then return nil end
+    local ok2,r=pcall(fn)
+    if not ok2 then return nil end
+    if type(r)=="number" then
+        if r~=r then return "NaN" end
+        if r==math.huge then return "∞" end
+        return string.format("%.10g",r)
+    end
+    return tostring(r)
+end
+
+local calcGrid=mkFrame(CalcWin,U2(1,-10,0,305),U2(0,5,0,102),COR_BG,1)
+calcGrid.ZIndex=12
+local cGL=Instance.new("UIGridLayout",calcGrid)
+cGL.CellSize=U2(0,54,0,38); cGL.CellPadding=U2(0,4,0,4)
+cGL.HorizontalAlignment=Enum.HorizontalAlignment.Center
+
+local CBTNS={
+    {"sin","sin(",C3(30,50,105)},{"cos","cos(",C3(30,50,105)},
+    {"tan","tan(",C3(30,50,105)},{"log","log(",C3(30,50,105)},
+    {"√","√(",C3(25,70,40)},{"x²","^2",C3(25,70,40)},
+    {"xʸ","^",C3(25,70,40)},{"π",tostring(math.pi),C3(65,25,75)},
+    {"(","(",C3(22,22,40)},{")","\)",C3(22,22,40)},
+    {"%","%",C3(22,22,40)},{"÷","÷",C3(85,28,28)},
+    {"7","7"},{"8","8"},{"9","9"},{"×","×",C3(85,28,28)},
+    {"4","4"},{"5","5"},{"6","6"},{"-","-",C3(85,28,28)},
+    {"1","1"},{"2","2"},{"3","3"},{"+","+",C3(85,28,28)},
+    {"0","0"},{".","."},{"!","!",C3(50,30,85)},{"=","=",C3(12,90,45)},
+    {"C","C",C3(105,22,22)},{"⌫","BS",C3(70,40,12)},
+    {"MC","MC",C3(25,30,65)},{"MR","MR",C3(25,30,65)},
+    {"M+","M+",C3(25,30,65)},{"abs","abs(",C3(30,50,105)},
+}
+local OPS={["+"]=true,["-"]=true,["×"]=true,["÷"]=true,["^"]=true,["%"]=true}
+for _,bd in ipairs(CBTNS) do
+    local lbl,val,bg=bd[1],bd[2],bd[3]
+    local b=Instance.new("TextButton",calcGrid)
+    b.Text=lbl; b.Font=Enum.Font.GothamBold; b.TextSize=12
+    b.TextColor3=C3(230,230,230); b.BackgroundColor3=bg or C3(18,18,34)
+    b.BorderSizePixel=0; b.ZIndex=13; b.AutoButtonColor=false
+    arred(b,6)
+    b.MouseButton1Click:Connect(function()
+        if val=="C" then cExpr="";cResult="";cLast=false;cShow()
+        elseif val=="BS" then
+            if cLast then cExpr="";cResult="";cLast=false
+            else cExpr=cExpr:sub(1,-2) end; cShow()
+        elseif val=="=" then
+            if cExpr~="" then
+                local r=cEval(cExpr)
+                cResult=r or "Erro"; cLast=r~=nil
+                if r then addHist("Calc: "..cExpr.." = "..r) end
+                cShow()
             end
+        elseif val=="MC" then cMem=0
+        elseif val=="MR" then
+            if cLast then cExpr="";cResult="";cLast=false end
+            cExpr=cExpr..tostring(cMem); cShow()
+        elseif val=="M+" then
+            local v=tonumber(cResult~="" and cResult or cExpr)
+            if v then cMem=cMem+v end
+        else
+            if cLast then
+                cExpr=OPS[val] and (cResult..val) or val
+                cResult=""; cLast=false
+            else cExpr=cExpr..val end
+            cShow()
         end
+    end)
+end
+
+-- ══════ FPS/PING ══════
+local FPSWin=criarJanela("FPSP","📶 "..T.fpsp,U2(0,148,0,52),U2(0.82,0,0.02,0))
+FPSWin.Visible=true
+local fpsLbl=mkLabel(FPSWin,T.ping..": --\n"..T.fps..": --",U2(1,-10,1,0),U2(0,5,0,32),12,Enum.Font.GothamBold,COR_TITULO)
+fpsLbl.ZIndex=12
+RunService.Heartbeat:Connect(function()
+    if FPSWin.Visible then
+        fpsLbl.Text=string.format("%s: %dms\n%s: %d",
+            T.ping,math.max(0,math.round(LP:GetNetworkPing()*1000)),
+            T.fps,fpsGlobal)
     end
 end)
 
---Eventos Miscelaneos
-local toggled = true
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.KeyCode == Enum.KeyCode.F then
-        toggled = not toggled
-        if playerGui:FindFirstChild("Chat") then
-            playerGui.Chat.Frame.Visible = toggled
-        end
+-- ══════ VIEW PLAYERS ══════
+local VPWin=criarJanela("VP","👥 "..T.vp,U2(0,308,0,285),U2(0.67,0,0.08,0))
+local vpRefBtn=mkBtn(VPWin,"↻ Refresh",U2(0,72,0,22),U2(1,-78,0,32),C3(35,18,75),10)
+vpRefBtn.ZIndex=12
+local vpScroll=mkScroll(VPWin,U2(1,-10,1,-62),U2(0,5,0,58))
+vpScroll.ZIndex=11
+local vpLL=Instance.new("UIListLayout",vpScroll); vpLL.Padding=UDim.new(0,5)
+
+local function atualizarVP()
+    for _,c in ipairs(vpScroll:GetChildren()) do
+        if c:IsA("Frame") then c:Destroy() end
     end
-end)
-
-pcall(function()
-    loadstring(game:HttpGet("https://pastebin.com/raw/AxVHmk1i"))()
-end)
-
-_G.AutoSpinWheel = true
-task.spawn(function()
-    while _G.AutoSpinWheel do
-        local rEvents = ReplicatedStorage:FindFirstChild("rEvents")
-        local remote = rEvents and rEvents:FindFirstChild("openFortuneWheelRemote")
-        if remote and ReplicatedStorage:FindFirstChild("fortuneWheelChances") then
-            remote:InvokeServer("openFortuneWheel", ReplicatedStorage.fortuneWheelChances["Fortune Wheel"])
+    local lista=Players:GetPlayers()
+    vpScroll.CanvasSize=U2(0,0,0,#lista*75)
+    for _,p in ipairs(lista) do
+        local pf=mkFrame(vpScroll,U2(1,-4,0,68),nil,C3(13,14,22),0)
+        pf.ZIndex=12; arred(pf,8)
+        local ps=Instance.new("UIStroke",pf); ps.Color=C3(45,30,80); ps.Thickness=0.8
+        local img=Instance.new("ImageLabel",pf)
+        img.Size=U2(0,46,0,46); img.Position=U2(0,6,0,11)
+        img.BackgroundColor3=C3(18,18,28); img.ZIndex=13; arred(img,23)
+        task.spawn(function()
+            pcall(function()
+                local ct,ok2=Players:GetUserThumbnailAsync(p.UserId,Enum.ThumbnailType.HeadShot,Enum.ThumbnailSize.Size48x48)
+                if ok2 then img.Image=ct end
+            end)
+        end)
+        if p==LP then
+            local badge=mkFrame(pf,U2(0,34,0,14),U2(0,4,0,3),C3(90,25,180),0)
+            badge.ZIndex=14; arred(badge,4)
+            local bt=mkLabel(badge,"VOCÊ",U2(1,0,1,0),nil,8,Enum.Font.GothamBold,C3(255,255,255),Enum.TextXAlignment.Center)
+            bt.ZIndex=15
         end
-        task.wait(1) 
-    end
-end)
-
-task.spawn(function()
-    while task.wait(0.5) do
-        pcall(function()
-            local rEvents = ReplicatedStorage:FindFirstChild("rEvents")
-            local remote = rEvents and rEvents:FindFirstChild("changeSpeedSizeRemote")
-            if remote then
-                remote:InvokeServer("changeSize", 0/0)
+        local info=mkLabel(pf,"...",U2(1,-58,1,-6),U2(0,56,0,3),10,Enum.Font.Gotham,COR_TXT)
+        info.ZIndex=13; info.TextWrapped=true
+        task.spawn(function()
+            local pais,estado=getLocalizacao(p)
+            local ciclo=0
+            while pf and pf.Parent do
+                ciclo=ciclo+1
+                local ms=math.max(1,math.round(p:GetNetworkPing()*1000))
+                local fpsE=ms>300 and math.random(18,30) or ms>150 and math.random(38,52) or math.random(56,62)
+                local cor=ms<80 and "🟢" or ms<150 and "🟡" or ms<300 and "🟠" or "🔴"
+                info.Text=string.format("%s  @%s\n%s %s: %dms  🖥%s: %d\n🌍 %s  📍 %s",
+                    p.DisplayName,p.Name,cor,T.ping,ms,T.fps,fpsE,pais,estado)
+                if ciclo%35==0 then
+                    locCache[p.UserId]=nil
+                    pais,estado=getLocalizacao(p)
+                end
+                task.wait(2)
             end
         end)
     end
+end
+vpRefBtn.MouseButton1Click:Connect(function() locCache={}; atualizarVP() end)
+Players.PlayerAdded:Connect(function() task.wait(1); atualizarVP() end)
+Players.PlayerRemoving:Connect(function() task.wait(0.3); atualizarVP() end)
+
+-- ══════ LOCALIZAÇÃO ══════
+local LocWin=criarJanela("Loc","📍 Localização",U2(0,238,0,185),U2(0.28,0,0.28,0))
+local locLbl=mkLabel(LocWin,"Clique em Detectar.",U2(1,-16,1,-70),U2(0,8,0,38),12,Enum.Font.Gotham,COR_TXT)
+locLbl.ZIndex=12; locLbl.LineHeight=1.4; locLbl.TextWrapped=true
+local locBtn=mkBtn(LocWin,"📍 Detectar minha localização",U2(1,-16,0,32),U2(0,8,1,-40),C3(32,15,70),11)
+locBtn.ZIndex=12
+local function detectarMinhaLoc()
+    locLbl.Text="🔍 Detectando..."
+    task.spawn(function()
+        locCache[LP.UserId]=nil
+        local p2,e2,cod=getLocalizacao(LP)
+        locLbl.Text=string.format("👤 %s (@%s)\n\n🌍 %s: %s\n📍 %s: %s\n🆔 Cód: %s\n📶 %s: %dms  🖥️%s: %d",
+            LP.DisplayName,LP.Name,
+            T.pais,p2,T.estado,e2,cod,
+            T.ping,math.max(0,math.round(LP:GetNetworkPing()*1000)),
+            T.fps,fpsGlobal)
+    end)
+end
+locBtn.MouseButton1Click:Connect(detectarMinhaLoc)
+LocWin:GetPropertyChangedSignal("Visible"):Connect(function()
+    if LocWin.Visible then detectarMinhaLoc() end
 end)
 
-if typeof(Killer) ~= "nil" and Killer.AddButton then
-    Killer:AddButton("Size NaN", function()
-        local rEvents = ReplicatedStorage:FindFirstChild("rEvents")
-        if rEvents and rEvents:FindFirstChild("changeSpeedSizeRemote") then
-            rEvents.changeSpeedSizeRemote:InvokeServer("changeSize", 0/0)
+-- ══════ FLY — INFINITE YIELD STYLE ══════
+local FlyWin=criarJanela("Fly","🦅 "..T.fly,U2(0,202,0,118),U2(0.63,0,0.72,0))
+local flyOn=false; local flySpd=50; local flyConns={}
+local flyVelLbl=mkLabel(FlyWin,T.velFly,U2(0,88,0,22),U2(0,8,0,36),10,Enum.Font.Gotham,COR_TXT)
+flyVelLbl.ZIndex=12
+local flyBox=Instance.new("TextBox",FlyWin)
+flyBox.Size=U2(0,80,0,24); flyBox.Position=U2(0,100,0,36)
+flyBox.BackgroundColor3=C3(18,14,32); flyBox.Text="50"
+flyBox.TextColor3=C3(255,195,70); flyBox.Font=Enum.Font.GothamBold
+flyBox.TextSize=13; flyBox.BorderSizePixel=0; flyBox.ZIndex=12
+arred(flyBox,5)
+flyBox.FocusLost:Connect(function()
+    local v=tonumber(flyBox.Text)
+    if v and v>0 and v<=1000 then flySpd=v
+    else flyBox.Text=tostring(flySpd) end
+end)
+local flyTogBtn=mkBtn(FlyWin,"🦅 "..T.ligar.." FLY",U2(1,-16,0,34),U2(0,8,0,68),C3(20,16,38),12)
+flyTogBtn.ZIndex=12
+local FLY_ON_COR=C3(65,22,145); local FLY_OFF_COR=C3(20,16,38)
+
+local function pararFly()
+    flyOn=false
+    for _,c in pairs(flyConns) do pcall(function() c:Disconnect() end) end
+    flyConns={}
+    local char=LP.Character
+    if char then
+        local hrp=char:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            for _,d in ipairs(hrp:GetChildren()) do
+                if d.Name=="_FBV" or d.Name=="_FBG" then d:Destroy() end
+            end
+        end
+        local hum=char:FindFirstChildOfClass("Humanoid")
+        if hum then hum.PlatformStand=false end
+    end
+    flyTogBtn.Text="🦅 "..T.ligar.." FLY"
+    flyTogBtn.BackgroundColor3=FLY_OFF_COR
+    addHist("Fly OFF")
+end
+
+local function iniciarFly()
+    local char=LP.Character or LP.CharacterAdded:Wait()
+    local hrp=char:WaitForChild("HumanoidRootPart",5)
+    local hum=char:FindFirstChildOfClass("Humanoid")
+    if not hrp or not hum then return end
+    flyOn=true; hum.PlatformStand=true
+    for _,d in ipairs(hrp:GetChildren()) do
+        if d.Name=="_FBV" or d.Name=="_FBG" then d:Destroy() end
+    end
+    local bv=Instance.new("BodyVelocity",hrp)
+    bv.Name="_FBV"; bv.MaxForce=Vector3.new(1e9,1e9,1e9); bv.Velocity=Vector3.zero
+    local bg=Instance.new("BodyGyro",hrp)
+    bg.Name="_FBG"; bg.MaxTorque=Vector3.new(9e9,9e9,9e9); bg.P=9000; bg.D=200; bg.CFrame=hrp.CFrame
+    flyTogBtn.Text="🦅 "..T.desligar.." FLY"
+    flyTogBtn.BackgroundColor3=FLY_ON_COR
+    addHist("Fly ON v="..flySpd)
+    local keys={}
+    table.insert(flyConns,UIS.InputBegan:Connect(function(i,gp)
+        if not gp then keys[i.KeyCode.Name]=true end
+    end))
+    table.insert(flyConns,UIS.InputEnded:Connect(function(i)
+        keys[i.KeyCode.Name]=nil
+    end))
+    table.insert(flyConns,RunService.Heartbeat:Connect(function()
+        if not flyOn or not hrp or not hrp.Parent then return end
+        local mv=Vector3.zero; local cam=CAM.CFrame
+        if keys["W"] then mv=mv+cam.LookVector end
+        if keys["S"] then mv=mv-cam.LookVector end
+        if keys["A"] then mv=mv-cam.RightVector end
+        if keys["D"] then mv=mv+cam.RightVector end
+        if keys["E"] or keys["Space"] then mv=mv+Vector3.new(0,1,0) end
+        if keys["Q"] or keys["LeftControl"] then mv=mv-Vector3.new(0,1,0) end
+        local spd=flySpd*(keys["LeftShift"] and 3 or 1)
+        bv.Velocity=mv.Magnitude>0.01 and mv.Unit*spd or bv.Velocity*0.82
+        bg.CFrame=CFrame.new(hrp.Position,hrp.Position+Vector3.new(cam.LookVector.X,0,cam.LookVector.Z))
+    end))
+end
+flyTogBtn.MouseButton1Click:Connect(function()
+    if flyOn then pararFly() else iniciarFly() end
+end)
+LP.CharacterAdded:Connect(function() if flyOn then task.wait(1); pararFly() end end)
+
+-- ══════ SHADERS ══════
+local shAtual=nil; local shEfeitos={}
+local function saveLighting()
+    return {Ambient=Lighting.Ambient,OutdoorAmbient=Lighting.OutdoorAmbient,
+        Brightness=Lighting.Brightness,ColorShift_Top=Lighting.ColorShift_Top,
+        ColorShift_Bottom=Lighting.ColorShift_Bottom,ExposureCompensation=Lighting.ExposureCompensation,
+        FogColor=Lighting.FogColor,FogStart=Lighting.FogStart,FogEnd=Lighting.FogEnd,
+        GlobalShadows=Lighting.GlobalShadows}
+end
+local lightBkp=saveLighting()
+local function limparShader()
+    for _,e in ipairs(shEfeitos) do pcall(function() e:Destroy() end) end
+    shEfeitos={}
+    for k,v in pairs(lightBkp) do pcall(function() Lighting[k]=v end) end
+    shAtual=nil
+end
+local function addEfeito(e) table.insert(shEfeitos,e); return e end
+
+local SHADERS={
+    {n="🌅 Sunset Warm",fn=function()
+        Lighting.Ambient=C3(90,55,30);Lighting.OutdoorAmbient=C3(130,70,35)
+        Lighting.Brightness=2.2;Lighting.ExposureCompensation=0.35
+        Lighting.ColorShift_Top=C3(240,100,20);Lighting.ColorShift_Bottom=C3(160,50,10)
+        Lighting.FogColor=C3(255,160,80);Lighting.FogStart=200;Lighting.FogEnd=600
+        local b=addEfeito(Instance.new("BloomEffect",Lighting));b.Intensity=0.9;b.Size=28;b.Threshold=0.85
+        local s=addEfeito(Instance.new("SunRaysEffect",Lighting));s.Intensity=0.25;s.Spread=0.4
+        local c=addEfeito(Instance.new("ColorCorrectionEffect",Lighting));c.Saturation=0.35;c.Contrast=0.2;c.TintColor=C3(255,200,160)
+    end},
+    {n="🌊 Ocean Blue",fn=function()
+        Lighting.Ambient=C3(10,30,70);Lighting.OutdoorAmbient=C3(20,60,140)
+        Lighting.Brightness=1.4;Lighting.ExposureCompensation=0.05
+        Lighting.ColorShift_Top=C3(30,90,200);Lighting.ColorShift_Bottom=C3(5,30,90)
+        Lighting.FogColor=C3(80,140,220);Lighting.FogStart=300;Lighting.FogEnd=800
+        local b=addEfeito(Instance.new("BloomEffect",Lighting));b.Intensity=0.5;b.Size=22;b.Threshold=0.9
+        local c=addEfeito(Instance.new("ColorCorrectionEffect",Lighting));c.Saturation=0.45;c.Contrast=0.15;c.TintColor=C3(160,200,255)
+        local d=addEfeito(Instance.new("DepthOfFieldEffect",Lighting));d.FocusDistance=20;d.InFocusRadius=30;d.NearIntensity=0;d.FarIntensity=0.3
+    end},
+    {n="🌿 Floresta Verde",fn=function()
+        Lighting.Ambient=C3(20,55,20);Lighting.OutdoorAmbient=C3(35,90,35)
+        Lighting.Brightness=2.5;Lighting.ExposureCompensation=0.2
+        Lighting.ColorShift_Top=C3(50,150,40);Lighting.ColorShift_Bottom=C3(15,70,15)
+        Lighting.FogColor=C3(60,120,40);Lighting.FogStart=150;Lighting.FogEnd=500
+        local b=addEfeito(Instance.new("BloomEffect",Lighting));b.Intensity=0.7;b.Size=18;b.Threshold=0.8
+        local s=addEfeito(Instance.new("SunRaysEffect",Lighting));s.Intensity=0.18;s.Spread=0.35
+        local c=addEfeito(Instance.new("ColorCorrectionEffect",Lighting));c.Saturation=0.55;c.Contrast=0.1;c.TintColor=C3(190,240,190)
+    end},
+    {n="🌙 Noite Estrelada",fn=function()
+        Lighting.Ambient=C3(4,4,12);Lighting.OutdoorAmbient=C3(8,8,25)
+        Lighting.Brightness=0.15;Lighting.ExposureCompensation=-0.6
+        Lighting.ColorShift_Top=C3(15,15,55);Lighting.ColorShift_Bottom=C3(3,3,12)
+        Lighting.FogColor=C3(8,8,20);Lighting.FogStart=80;Lighting.FogEnd=250
+        local b=addEfeito(Instance.new("BloomEffect",Lighting));b.Intensity=1.8;b.Size=36;b.Threshold=0.55
+        local c=addEfeito(Instance.new("ColorCorrectionEffect",Lighting));c.Saturation=0.1;c.Contrast=0.25;c.TintColor=C3(100,110,200)
+    end},
+    {n="🌸 Cerejeira Rosa",fn=function()
+        Lighting.Ambient=C3(90,45,65);Lighting.OutdoorAmbient=C3(170,85,120)
+        Lighting.Brightness=2.0;Lighting.ExposureCompensation=0.3
+        Lighting.ColorShift_Top=C3(255,140,190);Lighting.ColorShift_Bottom=C3(210,80,140)
+        Lighting.FogColor=C3(255,180,210);Lighting.FogStart=200;Lighting.FogEnd=600
+        local b=addEfeito(Instance.new("BloomEffect",Lighting));b.Intensity=1.2;b.Size=30;b.Threshold=0.75
+        local s=addEfeito(Instance.new("SunRaysEffect",Lighting));s.Intensity=0.2;s.Spread=0.45
+        local c=addEfeito(Instance.new("ColorCorrectionEffect",Lighting));c.Saturation=0.5;c.Contrast=0.1;c.TintColor=C3(255,210,225)
+    end},
+    {n="🔮 Neon Roxo",fn=function()
+        Lighting.Ambient=C3(25,0,55);Lighting.OutdoorAmbient=C3(50,0,110)
+        Lighting.Brightness=0.7;Lighting.ExposureCompensation=0.05
+        Lighting.ColorShift_Top=C3(140,0,255);Lighting.ColorShift_Bottom=C3(70,0,170)
+        Lighting.FogColor=C3(50,0,100);Lighting.FogStart=100;Lighting.FogEnd=300
+        local b=addEfeito(Instance.new("BloomEffect",Lighting));b.Intensity=2.0;b.Size=40;b.Threshold=0.5
+        local c=addEfeito(Instance.new("ColorCorrectionEffect",Lighting));c.Saturation=0.9;c.Contrast=0.3;c.TintColor=C3(210,160,255)
+        local s=addEfeito(Instance.new("SunRaysEffect",Lighting));s.Intensity=0.2;s.Spread=0.5
+    end},
+    {n="❄️ Inverno Ártico",fn=function()
+        Lighting.Ambient=C3(140,170,200);Lighting.OutdoorAmbient=C3(190,215,235)
+        Lighting.Brightness=3.5;Lighting.ExposureCompensation=0.7
+        Lighting.ColorShift_Top=C3(200,225,255);Lighting.ColorShift_Bottom=C3(170,200,235)
+        Lighting.FogColor=C3(220,235,255);Lighting.FogStart=400;Lighting.FogEnd=900
+        local b=addEfeito(Instance.new("BloomEffect",Lighting));b.Intensity=0.3;b.Size=16;b.Threshold=0.97
+        local c=addEfeito(Instance.new("ColorCorrectionEffect",Lighting));c.Saturation=-0.2;c.Contrast=0.15;c.TintColor=C3(230,245,255)
+    end},
+    {n="🔥 Vulcão",fn=function()
+        Lighting.Ambient=C3(90,18,0);Lighting.OutdoorAmbient=C3(170,35,0)
+        Lighting.Brightness=1.6;Lighting.ExposureCompensation=0.2
+        Lighting.ColorShift_Top=C3(255,65,0);Lighting.ColorShift_Bottom=C3(160,15,0)
+        Lighting.FogColor=C3(80,10,0);Lighting.FogStart=120;Lighting.FogEnd=400
+        local b=addEfeito(Instance.new("BloomEffect",Lighting));b.Intensity=1.4;b.Size=28;b.Threshold=0.6
+        local c=addEfeito(Instance.new("ColorCorrectionEffect",Lighting));c.Saturation=0.7;c.Contrast=0.3;c.TintColor=C3(255,160,80)
+    end},
+    {n="🌫️ Neblina Cinza",fn=function()
+        Lighting.Ambient=C3(75,75,85);Lighting.OutdoorAmbient=C3(110,110,120)
+        Lighting.Brightness=1.1;Lighting.ExposureCompensation=-0.15
+        Lighting.FogColor=C3(170,170,180);Lighting.FogStart=30;Lighting.FogEnd=120
+        local bl=addEfeito(Instance.new("BlurEffect",Lighting));bl.Size=8
+        local c=addEfeito(Instance.new("ColorCorrectionEffect",Lighting));c.Saturation=-0.5;c.Contrast=0.05;c.TintColor=C3(200,200,210)
+    end},
+    {n="✨ Cinema HDR",fn=function()
+        Lighting.Ambient=C3(45,40,35);Lighting.OutdoorAmbient=C3(90,80,70)
+        Lighting.Brightness=2.8;Lighting.ExposureCompensation=0.55
+        Lighting.ColorShift_Top=C3(255,225,170);Lighting.ColorShift_Bottom=C3(90,75,55)
+        Lighting.FogColor=C3(200,185,155);Lighting.FogStart=300;Lighting.FogEnd=800
+        local b=addEfeito(Instance.new("BloomEffect",Lighting));b.Intensity=0.8;b.Size=24;b.Threshold=0.88
+        local c=addEfeito(Instance.new("ColorCorrectionEffect",Lighting));c.Contrast=0.35;c.Saturation=0.25;c.TintColor=C3(255,240,205)
+        local s=addEfeito(Instance.new("SunRaysEffect",Lighting));s.Intensity=0.12;s.Spread=0.22
+        local d=addEfeito(Instance.new("DepthOfFieldEffect",Lighting));d.FocusDistance=30;d.InFocusRadius=25;d.NearIntensity=0;d.FarIntensity=0.4
+    end},
+    {n="🌈 Rainbow Pastel",fn=function()
+        Lighting.Ambient=C3(60,40,80);Lighting.OutdoorAmbient=C3(120,80,160)
+        Lighting.Brightness=1.9;Lighting.ExposureCompensation=0.25
+        Lighting.ColorShift_Top=C3(200,140,255);Lighting.ColorShift_Bottom=C3(100,60,180)
+        Lighting.FogColor=C3(200,180,255);Lighting.FogStart=200;Lighting.FogEnd=600
+        local b=addEfeito(Instance.new("BloomEffect",Lighting));b.Intensity=1.1;b.Size=26;b.Threshold=0.78
+        local c=addEfeito(Instance.new("ColorCorrectionEffect",Lighting));c.Saturation=0.6;c.Contrast=0.05;c.TintColor=C3(230,210,255)
+    end},
+    {n="🏜️ Deserto Dourado",fn=function()
+        Lighting.Ambient=C3(100,70,20);Lighting.OutdoorAmbient=C3(180,130,40)
+        Lighting.Brightness=3.0;Lighting.ExposureCompensation=0.45
+        Lighting.ColorShift_Top=C3(255,200,60);Lighting.ColorShift_Bottom=C3(180,110,20)
+        Lighting.FogColor=C3(255,210,100);Lighting.FogStart=250;Lighting.FogEnd=700
+        local b=addEfeito(Instance.new("BloomEffect",Lighting));b.Intensity=0.6;b.Size=20;b.Threshold=0.92
+        local s=addEfeito(Instance.new("SunRaysEffect",Lighting));s.Intensity=0.3;s.Spread=0.5
+        local c=addEfeito(Instance.new("ColorCorrectionEffect",Lighting));c.Saturation=0.4;c.Contrast=0.2;c.TintColor=C3(255,230,150)
+    end},
+}
+
+local ShWin=criarJanela("Shaders","🎨 "..T.sh,U2(0,232,0,425),U2(0.5,0,0.05,0))
+local shAtivLbl=mkLabel(ShWin,T.shaderAtivo.." "..T.nenhum,U2(1,-16,0,18),U2(0,8,0,33),10,Enum.Font.Gotham,C3(150,120,210))
+shAtivLbl.ZIndex=12
+local shScroll=mkScroll(ShWin,U2(1,-10,1,-96),U2(0,5,0,54))
+shScroll.ZIndex=11; shScroll.CanvasSize=U2(0,0,0,#SHADERS*38)
+local shLL=Instance.new("UIListLayout",shScroll); shLL.Padding=UDim.new(0,4)
+local shBtns={}
+local function resetShBtns()
+    for _,b in ipairs(shBtns) do
+        b.BackgroundColor3=C3(17,15,30)
+        local s=b:FindFirstChildOfClass("UIStroke"); if s then s.Color=C3(50,35,82) end
+    end
+end
+for i,sh in ipairs(SHADERS) do
+    local sb=mkBtn(shScroll,sh.n,U2(1,-6,0,32),nil,C3(17,15,30),11)
+    sb.ZIndex=12; sb.TextXAlignment=Enum.TextXAlignment.Left
+    local pd=Instance.new("UIPadding",sb); pd.PaddingLeft=UDim.new(0,8)
+    local ss=Instance.new("UIStroke",sb); ss.Color=C3(50,35,82); ss.Thickness=0.8
+    table.insert(shBtns,sb)
+    sb.MouseButton1Click:Connect(function()
+        if shAtual==i then
+            limparShader(); resetShBtns()
+            shAtivLbl.Text=T.shaderAtivo.." "..T.nenhum
+            addHist("Shader OFF: "..sh.n)
+        else
+            limparShader(); task.wait(0.05)
+            sh.fn(); shAtual=i
+            resetShBtns()
+            sb.BackgroundColor3=C3(50,15,105)
+            ss.Color=C3(160,80,255)
+            shAtivLbl.Text=T.shaderAtivo.." "..sh.n
+            addHist("Shader ON: "..sh.n)
         end
     end)
 end
-
-task.spawn(function()
-    task.wait(45)
-    ExecuteRealServerHop()
+local shRemBtn=mkBtn(ShWin,T.remShader,U2(1,-16,0,30),U2(0,8,1,-36),C3(60,12,12),11)
+shRemBtn.ZIndex=12
+shRemBtn.MouseButton1Click:Connect(function()
+    limparShader(); resetShBtns()
+    shAtivLbl.Text=T.shaderAtivo.." "..T.nenhum
+    addHist("Shader: removido")
 end)
+
+-- ══════ ANTI-LAG ══════
+local AL_NIV={
+    {n="🟢 Leve",
+     on=function() pcall(function() settings().Rendering.QualityLevel=Enum.QualityLevel.Level01 end) end,
+     off=function() pcall(function() settings().Rendering.QualityLevel=Enum.QualityLevel.Automatic end) end},
+    {n="🟡 Médio",
+     on=function()
+         pcall(function() settings().Rendering.QualityLevel=Enum.QualityLevel.Level01 end)
+         Lighting.GlobalShadows=false
+     end,
+     off=function()
+         pcall(function() settings().Rendering.QualityLevel=Enum.QualityLevel.Automatic end)
+         Lighting.GlobalShadows=true
+     end},
+    {n="🟠 Forte",
+     on=function()
+         pcall(function() settings().Rendering.QualityLevel=Enum.QualityLevel.Level01 end)
+         Lighting.GlobalShadows=false
+         for _,d in ipairs(workspace:GetDescendants()) do
+             if d:IsA("ParticleEmitter") or d:IsA("Smoke") or d:IsA("Fire") or d:IsA("Sparkles") then
+                 pcall(function() d.Enabled=false end)
+             end
+         end
+     end,
+     off=function()
+         pcall(function() settings().Rendering.QualityLevel=Enum.QualityLevel.Automatic end)
+         Lighting.GlobalShadows=true
+         for _,d in ipairs(workspace:GetDescendants()) do
+             if d:IsA("ParticleEmitter") or d:IsA("Smoke") or d:IsA("Fire") or d:IsA("Sparkles") then
+                 pcall(function() d.Enabled=true end)
+             end
+         end
+     end},
+    {n="🔴 Máximo",
+     on=function()
+         pcall(function() settings().Rendering.QualityLevel=Enum.QualityLevel.Level01 end)
+         Lighting.GlobalShadows=false
+         for _,d in ipairs(workspace:GetDescendants()) do
+             pcall(function()
+                 if d:IsA("ParticleEmitter") or d:IsA("Smoke") or d:IsA("Fire") or d:IsA("Sparkles") then d.Enabled=false end
+                 if d:IsA("BasePart") then d.CastShadow=false end
+             end)
+         end
+     end,
+     off=function()
+         pcall(function() settings().Rendering.QualityLevel=Enum.QualityLevel.Automatic end)
+         Lighting.GlobalShadows=true
+         for _,d in ipairs(workspace:GetDescendants()) do
+             pcall(function()
+                 if d:IsA("ParticleEmitter") or d:IsA("Smoke") or d:IsA("Fire") or d:IsA("Sparkles") then d.Enabled=true end
+                 if d:IsA("BasePart") then d.CastShadow=true end
+             end)
+         end
+     end},
+}
+
+local ALWin=criarJanela("AL","⚡ "..T.al,U2(0,242,0,325),U2(0.28,0,0.1,0))
+local alNiv=2; local alOn=false; local alTest=false
+local alNivLbl=mkLabel(ALWin,T.forca.." "..AL_NIV[2].n,U2(1,-16,0,20),U2(0,8,0,35),11,Enum.Font.Gotham,COR_TITULO)
+alNivLbl.ZIndex=12
+local alBtns={}
+for i=1,4 do
+    local ab=mkBtn(ALWin,tostring(i),U2(0,48,0,26),U2(0,5+(i-1)*54,0,59),i==alNiv and C3(80,22,165) or C3(18,16,32),12)
+    ab.ZIndex=12; table.insert(alBtns,ab)
+    ab.MouseButton1Click:Connect(function()
+        if alOn then AL_NIV[alNiv].off() end
+        alNiv=i; alNivLbl.Text=T.forca.." "..AL_NIV[i].n
+        for j=1,4 do alBtns[j].BackgroundColor3=j==i and C3(80,22,165) or C3(18,16,32) end
+        if alOn then AL_NIV[alNiv].on() end
+        addHist("Anti-Lag: nível→"..i)
+    end)
+end
+local alTogBtn=mkBtn(ALWin,T.ativarAL,U2(1,-16,0,34),U2(0,8,0,92),C3(18,16,32),12)
+alTogBtn.ZIndex=12
+alTogBtn.MouseButton1Click:Connect(function()
+    alOn=not alOn
+    if alOn then
+        AL_NIV[alNiv].on(); alTogBtn.Text=T.desativarAL; alTogBtn.BackgroundColor3=C3(70,18,145)
+        addHist("Anti-Lag ON nível "..alNiv)
+    else
+        AL_NIV[alNiv].off(); alTogBtn.Text=T.ativarAL; alTogBtn.BackgroundColor3=C3(18,16,32)
+        addHist("Anti-Lag OFF")
+    end
+end)
+local alDiv=mkFrame(ALWin,U2(1,-16,0,1),U2(0,8,0,134),C3(65,38,105),0)
+alDiv.ZIndex=12
+local alTestBtn=mkBtn(ALWin,T.testar,U2(1,-16,0,34),U2(0,8,0,142),C3(10,62,28),12)
+alTestBtn.ZIndex=12
+local alContagLbl=mkLabel(ALWin,"",U2(1,-16,0,22),U2(0,8,0,184),11,Enum.Font.GothamBold,C3(255,195,65))
+alContagLbl.ZIndex=12
+local alResLbl=mkLabel(ALWin,"",U2(1,-16,0,110),U2(0,8,0,210),10,Enum.Font.Gotham,C3(155,255,155))
+alResLbl.ZIndex=12; alResLbl.TextYAlignment=Enum.TextYAlignment.Top; alResLbl.TextWrapped=true
+alTestBtn.MouseButton1Click:Connect(function()
+    if alTest then return end; alTest=true
+    alTestBtn.BackgroundColor3=C3(72,42,8); alTestBtn.Text="⏳ "..T.testando
+    alContagLbl.Text=""; alResLbl.Text=""
+    local fA=fpsGlobal; local pA=math.max(1,math.round(LP:GetNetworkPing()*1000))
+    local ativou=false
+    if not alOn then AL_NIV[alNiv].on(); ativou=true end
+    for i=30,0,-1 do alContagLbl.Text="⏱️ "..i.."s"; task.wait(1) end
+    local fD=fpsGlobal; local pD=math.max(1,math.round(LP:GetNetworkPing()*1000))
+    local df,dp=fD-fA,pA-pD
+    alContagLbl.Text="✅ "..T.resultado
+    alResLbl.Text=string.format(
+        "📶 Ping: %dms→%dms  (%s%dms)\n🖥️ FPS: %d→%d  (%s%d)\n⏱️ Duração: 30s\n🔧 %s",
+        pA,pD,dp>=0 and "↓" or "↑",math.abs(dp),
+        fA,fD,df>=0 and "+" or "",df,
+        AL_NIV[alNiv].n)
+    addHist(string.format("AL Teste: Ping %d→%d FPS %d→%d",pA,pD,fA,fD))
+    if ativou then AL_NIV[alNiv].off() end
+    alTestBtn.Text=T.testar; alTestBtn.BackgroundColor3=C3(10,62,28); alTest=false
+end)
+
+-- ══════ CHAT INTERNO (sem enviar ao chat do jogo) ══════
+local ChatWin=criarJanela("Chat","💬 "..T.chat,U2(0,282,0,340),U2(0.55,0,0.07,0))
+
+local chatNomeLbl=mkLabel(ChatWin,T.nomechat,U2(0,72,0,22),U2(0,8,0,35),10,Enum.Font.Gotham,COR_TXT)
+chatNomeLbl.ZIndex=12
+local chatNomeBox=Instance.new("TextBox",ChatWin)
+chatNomeBox.Size=U2(1,-88,0,24); chatNomeBox.Position=U2(0,86,0,34)
+chatNomeBox.BackgroundColor3=C3(14,12,22); chatNomeBox.Text=LP.DisplayName
+chatNomeBox.TextColor3=COR_TITULO; chatNomeBox.Font=Enum.Font.Gotham
+chatNomeBox.TextSize=11; chatNomeBox.BorderSizePixel=0; chatNomeBox.ZIndex=12
+arred(chatNomeBox,5)
+local meuNome=LP.DisplayName
+chatNomeBox.FocusLost:Connect(function()
+    if chatNomeBox.Text~="" then meuNome=chatNomeBox.Text end
+end)
+
+local chatArea=mkFrame(ChatWin,U2(1,-16,0,213),U2(0,8,0,64),C3(4,5,11),0)
+chatArea.ZIndex=12; arred(chatArea,8)
+
+local chatScroll=mkScroll(chatArea,U2(1,-4,1,-4),U2(0,2,0,2))
+chatScroll.ZIndex=13
+local chatLL=Instance.new("UIListLayout",chatScroll)
+chatLL.Padding=UDim.new(0,2)
+chatLL.SortOrder=Enum.SortOrder.LayoutOrder
+
+local chatInput=Instance.new("TextBox",ChatWin)
+chatInput.Size=U2(1,-80,0,28); chatInput.Position=U2(0,8,0,284)
+chatInput.BackgroundColor3=C3(12,10,22); chatInput.Text=""
+chatInput.TextColor3=COR_TXT; chatInput.Font=Enum.Font.Gotham
+chatInput.TextSize=11; chatInput.PlaceholderText=T.digitar
+chatInput.PlaceholderColor3=C3(85,75,115); chatInput.BorderSizePixel=0; chatInput.ZIndex=12
+arred(chatInput,6)
+
+local chatEnvBtn=mkBtn(ChatWin,T.enviar,U2(0,63,0,28),U2(1,-71,0,284),C3(50,15,115),11)
+chatEnvBtn.ZIndex=12
+
+-- Registrar callback para exibir mensagens na janela
+local chatContador=0
+chatRegistrarCallback(function(entry)
+    chatContador=chatContador+1
+    local el=Instance.new("TextLabel",chatScroll)
+    el.Size=U2(1,-6,0,0); el.AutomaticSize=Enum.AutomaticSize.Y
+    el.BackgroundTransparency=1; el.TextWrapped=true
+    el.Font=Enum.Font.Gotham; el.TextSize=10
+    el.TextColor3=entry.minha and C3(175,255,175) or C3(195,185,255)
+    el.TextXAlignment=Enum.TextXAlignment.Left
+    el.Text=string.format("[%s] %s: %s",entry.hora,entry.nome,entry.msg)
+    el.LayoutOrder=entry.ordem; el.ZIndex=14
+    local canvas=chatLL.AbsoluteContentSize.Y+10
+    chatScroll.CanvasSize=U2(0,0,canvas > chatScroll.AbsoluteSize.Y and 0 or 0,canvas)
+    task.wait()
+    chatScroll.CanvasPosition=Vector2.new(0,math.max(0,chatLL.AbsoluteContentSize.Y-chatScroll.AbsoluteSize.Y))
+end)
+
+-- Enviar mensagem: APENAS para o chat interno, sem tocar no chat do jogo
+local function enviarMensagem()
+    local msg=chatInput.Text:match("^%s*(.-)%s*$")
+    if msg=="" then return end
+    -- Exibe localmente
+    chatDispatch(meuNome, msg, true)
+    -- Envia para outros jogadores do mesmo server com prefixo secreto
+    -- usando pcall para não quebrar se o jogo bloquear
+    pcall(function()
+        local ss=LP:FindFirstChild("SayMessageRequest") or
+                 game:GetService("ReplicatedStorage"):FindFirstChild("SayMessageRequest") or
+                 game:GetService("ReplicatedStorage"):FindFirstChild("DefaultChatSystemChatEvents") and
+                 game:GetService("ReplicatedStorage").DefaultChatSystemChatEvents:FindFirstChild("SayMessageRequest")
+        if ss then
+            ss:FireServer("__MF__"..meuNome..": "..msg, "All")
+        end
+    end)
+    chatInput.Text=""
+    addHist("Chat: msg enviada")
+end
+
+chatEnvBtn.MouseButton1Click:Connect(enviarMensagem)
+chatInput.FocusLost:Connect(function(e) if e then enviarMensagem() end end)
+
+-- ══════ HISTÓRICO ══════
+local HistWin=criarJanela("Hist","📋 Histórico",U2(0,252,0,295),U2(0.17,0,0.12,0))
+local histScroll=mkScroll(HistWin,U2(1,-10,1,-68),U2(0,5,0,35))
+histScroll.ZIndex=11
+local histLL=Instance.new("UIListLayout",histScroll); histLL.Padding=UDim.new(0,2)
+local function atualizarHist()
+    for _,c in ipairs(histScroll:GetChildren()) do
+        if c:IsA("TextLabel") then c:Destroy() end
+    end
+    if #historico==0 then
+        local e=mkLabel(histScroll,T.semHist,U2(1,0,0,22),nil,11,Enum.Font.Gotham,C3(105,90,135),Enum.TextXAlignment.Center)
+        e.ZIndex=12
+    else
+        for _,h in ipairs(historico) do
+            local hl=mkLabel(histScroll,h,U2(1,-4,0,17),nil,9,Enum.Font.Gotham,C3(168,158,200))
+            hl.ZIndex=12; hl.TextTruncate=Enum.TextTruncate.AtEnd
+        end
+    end
+    histScroll.CanvasSize=U2(0,0,0,math.max(#historico*19,28))
+end
+local histLimBtn=mkBtn(HistWin,T.limpar,U2(1,-16,0,30),U2(0,8,1,-38),C3(62,12,12),11)
+histLimBtn.ZIndex=12
+histLimBtn.MouseButton1Click:Connect(function() historico={}; atualizarHist() end)
+HistWin:GetPropertyChangedSignal("Visible"):Connect(function()
+    if HistWin.Visible then atualizarHist() end
+end)
+
+-- ══════ COR DAS BORDAS ══════
+local CoresWin=criarJanela("Cores","🎨 Cor das Bordas",U2(0,258,0,415),U2(0.2,0,0.08,0))
+local CORES_P={
+    {n="🟣 Roxo",    c=C3(140,50,255)},{n="🔴 Vermelho",c=C3(255,40,60)},
+    {n="🟢 Verde",   c=C3(40,220,100)},{n="🔵 Azul",    c=C3(40,120,255)},
+    {n="🟡 Amarelo", c=C3(255,220,0)}, {n="🟠 Laranja", c=C3(255,120,0)},
+    {n="🩷 Rosa",    c=C3(255,80,180)},{n="⚪ Branco",  c=C3(240,240,255)},
+    {n="🩵 Ciano",   c=C3(0,220,255)}, {n="🟤 Marrom",  c=C3(155,75,25)},
+    {n="💚 Lima",    c=C3(148,255,48)},{n="💜 Lilás",   c=C3(185,115,255)},
+    {n="🔶 Dourado", c=C3(255,195,0)}, {n="🩶 Cinza",   c=C3(155,155,175)},
+    {n="⬛ Escuro",  c=C3(22,22,32)},  {n="🌸 Salmão",  c=C3(255,138,115)},
+}
+local corSel=COR_DEF
+local corSelLbl=mkLabel(CoresWin,"● Selecionada: 🟣 Roxo",U2(1,-16,0,18),U2(0,8,0,34),11,Enum.Font.GothamBold,corSel)
+corSelLbl.ZIndex=12
+local hint=mkLabel(CoresWin,"Escolha a cor → clique na janela para aplicar:",U2(1,-16,0,16),U2(0,8,0,52),9,Enum.Font.Gotham,C3(130,115,165))
+hint.ZIndex=12; hint.TextWrapped=true
+local cGrid=mkFrame(CoresWin,U2(1,-16,0,102),U2(0,8,0,70),COR_BG,1)
+cGrid.ZIndex=12
+local cGGL=Instance.new("UIGridLayout",cGrid)
+cGGL.CellSize=U2(0,38,0,27); cGGL.CellPadding=U2(0,4,0,4)
+for _,pc in ipairs(CORES_P) do
+    local cb=Instance.new("TextButton",cGrid)
+    cb.BackgroundColor3=pc.c; cb.Text=""; cb.ZIndex=13; cb.BorderSizePixel=0; cb.AutoButtonColor=false
+    arred(cb,5)
+    cb.MouseButton1Click:Connect(function()
+        corSel=pc.c; corSelLbl.TextColor3=pc.c; corSelLbl.Text="● "..pc.n
+    end)
+end
+local cDiv=mkFrame(CoresWin,U2(1,-16,0,1),U2(0,8,0,178),C3(65,38,105),0); cDiv.ZIndex=12
+local jnLbl=mkLabel(CoresWin,T.janelas,U2(1,-16,0,16),U2(0,8,0,183),10,Enum.Font.Gotham,C3(135,115,170)); jnLbl.ZIndex=12
+
+local JNS={
+    {"Menu","Menu"},{"Calc","Calculadora"},{"FPSP","FPS & Ping"},
+    {"VP","Ver Jogadores"},{"Loc","Localização"},{"Fly","Fly"},
+    {"Shaders","Shaders"},{"AL","Anti-Lag"},{"Cores","Cor das Bordas"},
+    {"Cron","Cronômetro"},{"Atr","Atributos"},{"Ncl","Noclip"},
+    {"Chat","Chat"},{"Hist","Histórico"},{"Toggle","Botão Toggle"},
+}
+local jnScroll=mkScroll(CoresWin,U2(1,-10,0,168),U2(0,5,0,200))
+jnScroll.ZIndex=12; jnScroll.CanvasSize=U2(0,0,0,#JNS*30)
+local jnLL=Instance.new("UIListLayout",jnScroll); jnLL.Padding=UDim.new(0,3)
+for _,jn in ipairs(JNS) do
+    local id,exib=jn[1],jn[2]
+    local jb=mkBtn(jnScroll,"🪟 "..exib,U2(1,-4,0,25),nil,C3(16,13,27),10)
+    jb.ZIndex=13; jb.TextXAlignment=Enum.TextXAlignment.Left
+    local jp=Instance.new("UIPadding",jb); jp.PaddingLeft=UDim.new(0,8)
+    jb.MouseButton1Click:Connect(function()
+        local stroke=todasBordas[id]
+        if stroke then stroke.Color=corSel; jb.BackgroundColor3=C3(35,15,60)
+            addHist("Cor borda: "..exib) end
+    end)
+end
+local apTodas=mkBtn(CoresWin,"🎨 "..T.aplicarTodas,U2(1,-16,0,30),U2(0,8,1,-38),C3(42,15,85),11)
+apTodas.ZIndex=12
+apTodas.MouseButton1Click:Connect(function()
+    for _,s in pairs(todasBordas) do if s then s.Color=corSel end end
+    addHist("Cor aplicada em todas as bordas")
+end)
+
+-- ══════ CRONÔMETRO ══════
+local CronWin=criarJanela("Cron","⏱️ "..T.cron,U2(0,188,0,112),U2(0.35,0,0.4,0))
+local cronLbl=mkLabel(CronWin,"00:00.00",U2(1,0,0,40),U2(0,0,0,28),26,Enum.Font.Code,C3(215,190,255),Enum.TextXAlignment.Center)
+cronLbl.ZIndex=12
+local cronS=mkBtn(CronWin,T.start,U2(0,80,0,28),U2(0,8,0,76),C3(20,82,172),11); cronS.ZIndex=12
+local cronR=mkBtn(CronWin,T.reset,U2(0,80,0,28),U2(1,-88,0,76),C3(115,28,28),11); cronR.ZIndex=12
+local cRun,cSt,cEl=false,0,0
+RunService.Heartbeat:Connect(function()
+    if cRun then
+        cEl=os.clock()-cSt
+        cronLbl.Text=string.format("%02d:%02d.%02d",math.floor(cEl/60),math.floor(cEl%60),math.floor((cEl*100)%100))
+    end
+end)
+cronS.MouseButton1Click:Connect(function()
+    cRun=not cRun
+    if cRun then cSt=os.clock()-cEl; cronS.Text=T.pausar else cronS.Text=T.retomar end
+end)
+cronR.MouseButton1Click:Connect(function()
+    cRun=false; cEl=0; cronLbl.Text="00:00.00"; cronS.Text=T.start
+end)
+
+-- ══════ ATRIBUTOS ══════
+local AtrWin=criarJanela("Atr","⚡ "..T.atr,U2(0,182,0,115),U2(0.24,0,0.4,0))
+local function criarAjuste(lbl,y,pad,cb)
+    local l=mkLabel(AtrWin,lbl,U2(0,72,0,24),U2(0,8,0,y),10,Enum.Font.Gotham,COR_TXT); l.ZIndex=12
+    local b=Instance.new("TextBox",AtrWin)
+    b.Size=U2(0,76,0,24); b.Position=U2(0,85,0,y)
+    b.BackgroundColor3=C3(14,12,22); b.Text=tostring(pad)
+    b.TextColor3=C3(255,255,255); b.Font=Enum.Font.GothamBold; b.TextSize=12
+    b.BorderSizePixel=0; b.ZIndex=12; arred(b,5)
+    b.FocusLost:Connect(function()
+        local v=tonumber(b.Text)
+        if v then cb(v); addHist(lbl.." "..v) else b.Text=tostring(pad) end
+    end)
+end
+criarAjuste(T.vel,37,16,function(v)
+    local h=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+    if h then h.WalkSpeed=v end
+end)
+criarAjuste(T.pulo,70,50,function(j)
+    local h=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+    if h then h.JumpPower=j; h.UseJumpPower=true end
+end)
+
+-- ══════ NOCLIP ══════
+local NclWin=criarJanela("Ncl","🧱 "..T.ncl,U2(0,155,0,75),U2(0.05,0,0.65,0))
+local nclOn=false
+local nclBtn=mkBtn(NclWin,T.inativo,U2(1,-16,0,30),U2(0,8,0,35),C3(18,16,32),12); nclBtn.ZIndex=12
+nclBtn.MouseButton1Click:Connect(function()
+    nclOn=not nclOn
+    nclBtn.Text=nclOn and T.ativo or T.inativo
+    nclBtn.BackgroundColor3=nclOn and C3(75,20,158) or C3(18,16,32)
+    addHist("Noclip: "..(nclOn and "ON" or "OFF"))
+end)
+RunService.Heartbeat:Connect(function()
+    if nclOn and LP.Character then
+        for _,p in ipairs(LP.Character:GetDescendants()) do
+            if p:IsA("BasePart") then pcall(function() p.CanCollide=false end) end
+        end
+    end
+end)
+
+-- ══════ ESP ══════
+local espAura,espName,espRain=false,false,false
+local espCor=COR_DEF
+local espObjs={}
+task.spawn(function()
+    local t=0
+    while true do
+        espCor=espRain and Color3.fromHSV(t,1,1) or COR_DEF
+        t=(t+0.01)%1; task.wait(0.03)
+    end
+end)
+local function remESP()
+    for _,o in ipairs(espObjs) do pcall(function() o:Destroy() end) end
+    espObjs={}
+end
+RunService.RenderStepped:Connect(function()
+    if not espAura and not espName then remESP(); return end
+    for i=#espObjs,1,-1 do
+        if not espObjs[i] or not espObjs[i].Parent then table.remove(espObjs,i) end
+    end
+    for _,p in ipairs(Players:GetPlayers()) do
+        if p~=LP and p.Character then
+            local chr=p.Character; local hrp=chr:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local hl=chr:FindFirstChild("_MFESP")
+                if espAura then
+                    if not hl then
+                        hl=Instance.new("Highlight"); hl.Name="_MFESP"
+                        hl.FillTransparency=0.6; hl.OutlineTransparency=0
+                        hl.Parent=chr; table.insert(espObjs,hl)
+                    end
+                    hl.FillColor=espCor; hl.OutlineColor=espCor
+                else if hl then hl:Destroy() end end
+                local bb=hrp:FindFirstChild("_MFESPName")
+                if espName then
+                    local lbl2
+                    if not bb then
+                        bb=Instance.new("BillboardGui"); bb.Name="_MFESPName"
+                        bb.Size=U2(0,200,0,50); bb.AlwaysOnTop=true
+                        bb.StudsOffset=Vector3.new(0,3.5,0); bb.Parent=hrp
+                        table.insert(espObjs,bb)
+                        lbl2=Instance.new("TextLabel",bb)
+                        lbl2.Size=U2(1,0,1,0); lbl2.BackgroundTransparency=1
+                        lbl2.Font=Enum.Font.GothamBold; lbl2.TextSize=14
+                    else lbl2=bb:FindFirstChildOfClass("TextLabel") end
+                    if lbl2 then
+                        lbl2.Text=p.DisplayName.."\n(@"..p.Name..")"
+                        lbl2.TextColor3=espCor
+                    end
+                else if bb then bb:Destroy() end end
+            end
+        end
+    end
+end)
+
+-- ══════ SHIFT LOCK ══════
+local slOn=false
+RunService.RenderStepped:Connect(function()
+    if slOn and LP.Character then
+        local hrp=LP.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local lv=CAM.CFrame.LookVector
+            hrp.CFrame=CFrame.new(hrp.Position,hrp.Position+Vector3.new(lv.X,0,lv.Z))
+        end
+    end
+end)
+
+-- ══════ BOTÕES DO MENU ══════
+mkMenuBtn(T.calc,     togWin(CalcWin))
+mkMenuBtn(T.fpsp,     togWin(FPSWin))
+mkMenuBtn(T.vp,       togWin(VPWin, atualizarVP))
+mkMenuBtn(T.cron,     togWin(CronWin))
+mkMenuBtn(T.fly,      togWin(FlyWin))
+mkMenuBtn(T.atr,      togWin(AtrWin))
+mkMenuBtn(T.ncl,      togWin(NclWin))
+mkMenuBtn(T.al,       togWin(ALWin))
+mkMenuBtn(T.sh,       togWin(ShWin))
+mkMenuBtn(T.chat,     togWin(ChatWin))
+mkMenuBtn(T.hist,     togWin(HistWin, atualizarHist))
+mkMenuBtn(T.loc,      togWin(LocWin))
+mkMenuBtn(T.cores,    togWin(CoresWin))
+
+local slBtn=mkMenuBtn(T.sl0,function() end)
+slBtn.MouseButton1Click:Connect(function()
+    slOn=not slOn; slBtn.Text=slOn and T.sl1 or T.sl0
+    addHist("Shift Lock: "..(slOn and "ON" or "OFF"))
+end)
+local eaBtn=mkMenuBtn(T.ea0,function() end)
+eaBtn.MouseButton1Click:Connect(function()
+    espAura=not espAura; eaBtn.Text=espAura and T.ea1 or T.ea0
+    addHist("ESP Aura: "..(espAura and "ON" or "OFF"))
+end)
+local enBtn=mkMenuBtn(T.en0,function() end)
+enBtn.MouseButton1Click:Connect(function()
+    espName=not espName; enBtn.Text=espName and T.en1 or T.en0
+    addHist("ESP Nome: "..(espName and "ON" or "OFF"))
+end)
+local erBtn=mkMenuBtn(T.er0,function() end)
+erBtn.MouseButton1Click:Connect(function()
+    espRain=not espRain; erBtn.Text=espRain and T.er1 or T.er0
+    addHist("ESP Rainbow: "..(espRain and "ON" or "OFF"))
+end)
+
+-- ══════ ANIMAÇÃO TOGGLE ══════
+task.spawn(function()
+    local t=0
+    while true do
+        TogStroke.Color=Color3.fromHSV(t,0.9,1)
+        t=(t+0.005)%1; task.wait(0.03)
+    end
+end)
+
+-- ══════ INIT ══════
+addHist("Script carregado — Idioma: "..LANG:upper())
+print("✅ Multi-Function | "..LANG:upper().." | Carregado!")
