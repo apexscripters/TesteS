@@ -1,8 +1,3 @@
---[[
-    Muscle Legends - Auto Treadmill XP v5
-    Parte 1 de 2
---]]
-
 -- Servicios principales del juego
 local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
@@ -13,17 +8,18 @@ local Workspace        = game:GetService("Workspace")
 -- Referencia al jugador local
 local player = Players.LocalPlayer
 
--- Datos de cada caminadora con nombre, posicion en el mapa y rotacion del personaje
--- Ajusta rotY en 7 y 8 si la orientacion no es correcta (prueba 0, 90, 180 o 270)
+-- Datos de cada caminadora con posicion, rotacion y modo de orientacion
+-- useWorldRot=true usa rotacion absoluta en el mundo (para caminadoras 7 y 8)
+-- Si la orientacion aun no es correcta en 7 u 8, ajusta rotY (0, 90, 180 o 270)
 local treadmillData = {
-    { name = "Treadmill  •  1 XP",  pos = Vector3.new(239, 9, 388),       rotY = 180 },
-    { name = "Treadmill  •  2 XP",  pos = Vector3.new(238, 9, 358),       rotY = 180 },
-    { name = "Treadmill  •  3 XP",  pos = Vector3.new(235, 10, 325),      rotY = 180 },
-    { name = "Treadmill  •  4 XP",  pos = Vector3.new(230, 10, 280),      rotY = 180 },
-    { name = "Treadmill  •  5 XP",  pos = Vector3.new(221, 12, 220),      rotY = 180 },
-    { name = "Treadmill  •  6 XP",  pos = Vector3.new(215, 13, -118),     rotY = 180 },
-    { name = "Treadmill  •  7 XP",  pos = Vector3.new(4367, 1003, -3642), rotY = 270 },
-    { name = "Treadmill  •  8 XP",  pos = Vector3.new(-8131, 32, 2814),   rotY = 0   },
+    { name = "Treadmill  •  1 XP",  pos = Vector3.new(239, 9, 388),       rotY = 180, useWorldRot = false },
+    { name = "Treadmill  •  2 XP",  pos = Vector3.new(238, 9, 358),       rotY = 180, useWorldRot = false },
+    { name = "Treadmill  •  3 XP",  pos = Vector3.new(235, 10, 325),      rotY = 180, useWorldRot = false },
+    { name = "Treadmill  •  4 XP",  pos = Vector3.new(230, 10, 280),      rotY = 180, useWorldRot = false },
+    { name = "Treadmill  •  5 XP",  pos = Vector3.new(221, 12, 220),      rotY = 180, useWorldRot = false },
+    { name = "Treadmill  •  6 XP",  pos = Vector3.new(215, 13, -118),     rotY = 180, useWorldRot = false },
+    { name = "Treadmill  •  7 XP",  pos = Vector3.new(4367, 1003, -3642), rotY = 90,  useWorldRot = true  },
+    { name = "Treadmill  •  8 XP",  pos = Vector3.new(-8131, 32, 2814),   rotY = 180, useWorldRot = true  },
 }
 
 -- Configuracion general del farm
@@ -40,12 +36,14 @@ local heartbeatConn      = nil
 local strengthConn       = nil
 local lastStrengthValue  = nil
 local targetCFrameGlobal = nil
+-- Guarda la posicion del jugador antes de iniciar el farm para retornar al finalizar
+local savedPosition      = nil
 
--- Elimina la interfaz anterior para evitar duplicados
+-- Elimina la interfaz anterior si ya existe para evitar duplicados
 local oldGui = player:WaitForChild("PlayerGui"):FindFirstChild("MLGui_v5")
 if oldGui then oldGui:Destroy() end
 
--- Paleta de colores de la interfaz
+-- Paleta de colores de toda la interfaz
 local C = {
     bg          = Color3.fromRGB(14, 14, 22),
     panel       = Color3.fromRGB(22, 22, 36),
@@ -81,22 +79,22 @@ local function makeStroke(parent, color, thickness, transparency)
     return s
 end
 
--- Crea una etiqueta de texto con los parametros recibidos
+-- Crea una etiqueta de texto con los parametros dados
 local function makeLabel(parent, text, size, font, color, xAlign)
     local l = Instance.new("TextLabel")
-    l.Text             = text
-    l.Size             = size
+    l.Text                 = text
+    l.Size                 = size
     l.BackgroundTransparency = 1
-    l.TextColor3       = color or C.text
-    l.Font             = font or Enum.Font.GothamMedium
-    l.TextSize         = 13
-    l.TextXAlignment   = xAlign or Enum.TextXAlignment.Left
-    l.TextTruncate     = Enum.TextTruncate.AtEnd
-    l.Parent           = parent
+    l.TextColor3           = color or C.text
+    l.Font                 = font or Enum.Font.GothamMedium
+    l.TextSize             = 13
+    l.TextXAlignment       = xAlign or Enum.TextXAlignment.Left
+    l.TextTruncate         = Enum.TextTruncate.AtEnd
+    l.Parent               = parent
     return l
 end
 
--- Crea el contenedor principal de la interfaz grafica
+-- Crea el contenedor principal de la interfaz grafica en pantalla
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name           = "MLGui_v5"
 screenGui.ResetOnSpawn   = false
@@ -104,10 +102,10 @@ screenGui.IgnoreGuiInset = true
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 screenGui.Parent         = player:WaitForChild("PlayerGui")
 
--- Marco principal que contiene toda la interfaz
+-- Marco principal con ancho ligeramente reducido para mejor visualizacion
 local mainFrame = Instance.new("Frame")
-mainFrame.Size             = UDim2.new(0, 300, 0, 360)
-mainFrame.Position         = UDim2.new(0.5, -150, 0.5, -180)
+mainFrame.Size             = UDim2.new(0, 275, 0, 360)
+mainFrame.Position         = UDim2.new(0.5, -137, 0.5, -180)
 mainFrame.BackgroundColor3 = C.bg
 mainFrame.BorderSizePixel  = 0
 mainFrame.Active           = true
@@ -116,7 +114,7 @@ mainFrame.Parent           = screenGui
 makeCorner(mainFrame, 14)
 makeStroke(mainFrame, C.border, 1.5)
 
--- Efecto de brillo alrededor del marco principal
+-- Efecto de brillo decorativo alrededor del marco principal
 local glow = Instance.new("ImageLabel")
 glow.Size               = UDim2.new(1, 40, 1, 40)
 glow.Position           = UDim2.new(0, -20, 0, -20)
@@ -129,14 +127,14 @@ glow.SliceCenter        = Rect.new(24, 24, 276, 276)
 glow.ZIndex             = -1
 glow.Parent             = mainFrame
 
--- Marco interno que recorta el contenido para que no desborde
+-- Marco interno que recorta el contenido para que no desborde del marco principal
 local innerClip = Instance.new("Frame")
 innerClip.Size                 = UDim2.new(1, 0, 1, 0)
 innerClip.BackgroundTransparency = 1
 innerClip.ClipsDescendants     = true
 innerClip.Parent               = mainFrame
 
--- Encabezado de la interfaz con titulo y boton de minimizar
+-- Encabezado con icono, titulo y boton de minimizar
 local header = Instance.new("Frame")
 header.Size             = UDim2.new(1, 0, 0, 56)
 header.BackgroundColor3 = C.panel
@@ -144,7 +142,7 @@ header.BorderSizePixel  = 0
 header.Parent           = innerClip
 makeCorner(header, 14)
 
--- Linea decorativa de acento en la parte superior del encabezado
+-- Linea de acento decorativa en la parte superior del encabezado
 local accentLine = Instance.new("Frame")
 accentLine.Size             = UDim2.new(0.5, 0, 0, 2)
 accentLine.Position         = UDim2.new(0.25, 0, 0, 0)
@@ -153,23 +151,23 @@ accentLine.BorderSizePixel  = 0
 accentLine.Parent           = header
 makeCorner(accentLine, 2)
 
--- Icono de corrida del encabezado
+-- Icono de corrida dentro del encabezado
 local icon = Instance.new("TextLabel")
-icon.Text           = "🏃"
-icon.Size           = UDim2.new(0, 34, 0, 34)
-icon.Position       = UDim2.new(0, 14, 0.5, -17)
+icon.Text             = "🏃"
+icon.Size             = UDim2.new(0, 34, 0, 34)
+icon.Position         = UDim2.new(0, 14, 0.5, -17)
 icon.BackgroundColor3 = C.selected
-icon.Font           = Enum.Font.GothamBold
-icon.TextSize       = 20
-icon.TextXAlignment = Enum.TextXAlignment.Center
-icon.TextYAlignment = Enum.TextYAlignment.Center
-icon.Parent         = header
+icon.Font             = Enum.Font.GothamBold
+icon.TextSize         = 20
+icon.TextXAlignment   = Enum.TextXAlignment.Center
+icon.TextYAlignment   = Enum.TextYAlignment.Center
+icon.Parent           = header
 makeCorner(icon, 10)
 
 -- Titulo principal del panel
 local titleLabel = Instance.new("TextLabel")
 titleLabel.Text           = "Muscle Legends"
-titleLabel.Size           = UDim2.new(0, 160, 0, 20)
+titleLabel.Size           = UDim2.new(0, 155, 0, 20)
 titleLabel.Position       = UDim2.new(0, 56, 0, 10)
 titleLabel.BackgroundTransparency = 1
 titleLabel.TextColor3     = C.text
@@ -178,10 +176,10 @@ titleLabel.TextSize       = 15
 titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 titleLabel.Parent         = header
 
--- Subtitulo del panel
+-- Subtitulo do panel abajo del titulo
 local subtitleLabel = Instance.new("TextLabel")
 subtitleLabel.Text           = "Auto Treadmill XP"
-subtitleLabel.Size           = UDim2.new(0, 160, 0, 14)
+subtitleLabel.Size           = UDim2.new(0, 155, 0, 14)
 subtitleLabel.Position       = UDim2.new(0, 56, 0, 30)
 subtitleLabel.BackgroundTransparency = 1
 subtitleLabel.TextColor3     = C.accentLight
@@ -190,7 +188,7 @@ subtitleLabel.TextSize       = 11
 subtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 subtitleLabel.Parent         = header
 
--- Boton para minimizar la interfaz y mostrar el boton flotante
+-- Boton que minimiza la interfaz principal y muestra el boton flotante
 local minBtn = Instance.new("TextButton")
 minBtn.Text             = "─"
 minBtn.Size             = UDim2.new(0, 30, 0, 30)
@@ -215,7 +213,7 @@ local secLabel1 = makeLabel(body, "ESTEIRA", UDim2.new(1, 0, 0, 14), Enum.Font.G
 secLabel1.Position = UDim2.new(0, 0, 0, 0)
 secLabel1.TextSize = 10
 
--- Contenedor del selector de caminadora estilo ruleta
+-- Contenedor principal del selector de caminadora estilo ruleta
 local rollerContainer = Instance.new("Frame")
 rollerContainer.Size             = UDim2.new(1, 0, 0, ITEM_HEIGHT * VISIBLE_ITEMS)
 rollerContainer.Position         = UDim2.new(0, 0, 0, 18)
@@ -226,7 +224,7 @@ rollerContainer.Parent           = body
 makeCorner(rollerContainer, 10)
 makeStroke(rollerContainer, C.border, 1)
 
--- Resaltado visual del item seleccionado en la ruleta
+-- Resaltado visual del item seleccionado en el centro de la ruleta
 local selHighlight = Instance.new("Frame")
 selHighlight.Size             = UDim2.new(1, 0, 0, ITEM_HEIGHT)
 selHighlight.Position         = UDim2.new(0, 0, 0, ITEM_HEIGHT)
@@ -236,7 +234,7 @@ selHighlight.ZIndex           = 1
 selHighlight.Parent           = rollerContainer
 makeCorner(selHighlight, 8)
 
--- Linea superior del resaltado seleccionado
+-- Linea de acento en el borde superior del item seleccionado
 local hlTop = Instance.new("Frame")
 hlTop.Size             = UDim2.new(1, 0, 0, 1)
 hlTop.BackgroundColor3 = C.accent
@@ -244,7 +242,7 @@ hlTop.BorderSizePixel  = 0
 hlTop.ZIndex           = 2
 hlTop.Parent           = selHighlight
 
--- Linea inferior del resaltado seleccionado
+-- Linea de acento en el borde inferior del item seleccionado
 local hlBot = Instance.new("Frame")
 hlBot.Size             = UDim2.new(1, 0, 0, 1)
 hlBot.Position         = UDim2.new(0, 0, 1, -1)
@@ -266,21 +264,21 @@ rollerScroll.ZIndex             = 3
 rollerScroll.ElasticBehavior    = Enum.ElasticBehavior.WhenScrollable
 rollerScroll.Parent             = rollerContainer
 
--- Relleno superior para que el primer item quede centrado en la ruleta
+-- Relleno superior para que el primer item quede centrado en la zona de seleccion
 local padTop = Instance.new("Frame")
 padTop.Size                 = UDim2.new(1, 0, 0, ITEM_HEIGHT)
 padTop.Position             = UDim2.new(0, 0, 0, 0)
 padTop.BackgroundTransparency = 1
 padTop.Parent               = rollerScroll
 
--- Relleno inferior para que el ultimo item quede centrado en la ruleta
+-- Relleno inferior para que el ultimo item quede centrado en la zona de seleccion
 local padBot = Instance.new("Frame")
 padBot.Size                 = UDim2.new(1, 0, 0, ITEM_HEIGHT)
 padBot.Position             = UDim2.new(0, 0, 0, (#treadmillData + 1) * ITEM_HEIGHT)
 padBot.BackgroundTransparency = 1
 padBot.Parent               = rollerScroll
 
--- Genera dinamicamente los items de la ruleta con numero y nombre
+-- Genera los items de la ruleta dinamicamente con numero y nombre de cada caminadora
 local rollerItems = {}
 for i, data in ipairs(treadmillData) do
     local item = Instance.new("TextButton")
@@ -326,7 +324,7 @@ for i, data in ipairs(treadmillData) do
 
     rollerItems[i] = { btn = item, nameLabel = nameLabel, numBadge = numBadge }
 
-    -- Selecciona la caminadora al hacer clic y anima la ruleta hacia ese item
+    -- Selecciona la caminadora al tocar el item y desplaza la ruleta hacia ella
     item.MouseButton1Click:Connect(function()
         selectedIndex = i
         local targetY = (i - 1) * ITEM_HEIGHT
@@ -346,7 +344,7 @@ local function snapRoller()
     }):Play()
 end
 
--- Detecta cuando se suelta el scroll para aplicar el ajuste de posicion
+-- Detecta cuando se suelta el scroll y aplica el ajuste automatico de posicion
 rollerScroll.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1
     or input.UserInputType == Enum.UserInputType.Touch then
@@ -354,7 +352,7 @@ rollerScroll.InputEnded:Connect(function(input)
     end
 end)
 
--- Degradado superior de la ruleta para dar efecto de profundidad
+-- Degradado superior de la ruleta para efecto de profundidad visual
 local fadeTop = Instance.new("Frame")
 fadeTop.Size                 = UDim2.new(1, 0, 0, ITEM_HEIGHT)
 fadeTop.BackgroundColor3     = C.card
@@ -368,7 +366,7 @@ fadeTopGrad.Color        = ColorSequence.new({ ColorSequenceKeypoint.new(0, Colo
 fadeTopGrad.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) })
 fadeTopGrad.Parent       = fadeTop
 
--- Degradado inferior de la ruleta para dar efecto de profundidad
+-- Degradado inferior de la ruleta para efecto de profundidad visual
 local fadeBot = Instance.new("Frame")
 fadeBot.Size                 = UDim2.new(1, 0, 0, ITEM_HEIGHT)
 fadeBot.Position             = UDim2.new(0, 0, 1, -ITEM_HEIGHT)
@@ -383,12 +381,12 @@ fadeBotGrad.Color        = ColorSequence.new({ ColorSequenceKeypoint.new(0, Colo
 fadeBotGrad.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) })
 fadeBotGrad.Parent       = fadeBot
 
--- Etiqueta de seccion para el campo de XP objetivo
+-- Etiqueta de seccion para el campo de cantidad de XP objetivo
 local secLabel2 = makeLabel(body, "GANHOS DE XP", UDim2.new(1, 0, 0, 14), Enum.Font.GothamBold, C.accentLight)
 secLabel2.Position = UDim2.new(0, 0, 0, ITEM_HEIGHT * VISIBLE_ITEMS + 24)
 secLabel2.TextSize = 10
 
--- Contenedor del campo de entrada de cantidad de XP
+-- Contenedor del campo de entrada de la cantidad de ganancias objetivo
 local xpFrame = Instance.new("Frame")
 xpFrame.Size             = UDim2.new(1, 0, 0, 38)
 xpFrame.Position         = UDim2.new(0, 0, 0, ITEM_HEIGHT * VISIBLE_ITEMS + 42)
@@ -398,7 +396,7 @@ xpFrame.Parent           = body
 makeCorner(xpFrame, 10)
 makeStroke(xpFrame, C.border, 1)
 
--- Icono decorativo del campo de XP
+-- Icono de rayo decorativo dentro del campo de XP
 local xpIcon = Instance.new("TextLabel")
 xpIcon.Text           = "⚡"
 xpIcon.Size           = UDim2.new(0, 30, 1, 0)
@@ -409,7 +407,7 @@ xpIcon.Font           = Enum.Font.GothamBold
 xpIcon.TextSize       = 16
 xpIcon.Parent         = xpFrame
 
--- Campo de texto para ingresar la cantidad de XP a farmear
+-- Campo de texto donde el usuario escribe cuantas ganancias quiere farmear
 local xpInput = Instance.new("TextBox")
 xpInput.Text              = tostring(DEFAULT_GAINS)
 xpInput.Size              = UDim2.new(1, -42, 1, -8)
@@ -422,10 +420,10 @@ xpInput.PlaceholderText   = "10"
 xpInput.PlaceholderColor3 = C.textDim
 xpInput.Parent            = xpFrame
 
--- Posicion vertical del boton dentro del cuerpo
+-- Posicion vertical del boton principal dentro del cuerpo
 local toggleY = ITEM_HEIGHT * VISIBLE_ITEMS + 94
 
--- Boton principal para iniciar o detener el farm
+-- Boton principal que inicia o detiene el farm de XP
 local toggleBtn = Instance.new("TextButton")
 toggleBtn.Size             = UDim2.new(1, 0, 0, 48)
 toggleBtn.Position         = UDim2.new(0, 0, 0, toggleY)
@@ -438,7 +436,7 @@ toggleBtn.BorderSizePixel  = 0
 toggleBtn.Parent           = body
 makeCorner(toggleBtn, 12)
 
--- Degradado de color verde aplicado al boton principal
+-- Degradado de verde aplicado sobre el boton de inicio
 local toggleGrad = Instance.new("UIGradient")
 toggleGrad.Rotation = 90
 toggleGrad.Color    = ColorSequence.new({
@@ -454,7 +452,7 @@ toggleInner.Position             = UDim2.new(0, 2, 0, 2)
 toggleInner.BackgroundTransparency = 1
 toggleInner.Parent               = toggleBtn
 
--- Icono del boton que cambia entre play y stop
+-- Icono del boton que cambia entre play y stop segun el estado
 local toggleIcon = Instance.new("TextLabel")
 toggleIcon.Text           = "▶"
 toggleIcon.Size           = UDim2.new(0, 32, 1, 0)
@@ -465,7 +463,7 @@ toggleIcon.Font           = Enum.Font.GothamBold
 toggleIcon.TextSize       = 18
 toggleIcon.Parent         = toggleInner
 
--- Texto del boton que indica la accion disponible
+-- Texto del boton que indica la accion disponible al presionarlo
 local toggleText = Instance.new("TextLabel")
 toggleText.Text           = "INICIAR FARM"
 toggleText.Size           = UDim2.new(1, -60, 1, 0)
@@ -477,7 +475,7 @@ toggleText.TextSize       = 14
 toggleText.TextXAlignment = Enum.TextXAlignment.Left
 toggleText.Parent         = toggleInner
 
--- Animacion de pulso en el boton cuando el farm esta corriendo
+-- Animacion de pulso visible en el boton cuando el farm esta en ejecucion
 local function pulseToggle(active)
     if active then
         local t = TweenService:Create(toggleBtn, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
@@ -489,7 +487,7 @@ local function pulseToggle(active)
 end
 local pulseTween = nil
 
--- Barra inferior que muestra el estado actual del farm
+-- Barra de estado en la parte inferior que muestra el estado del farm en texto
 local statusBar = Instance.new("Frame")
 statusBar.Size             = UDim2.new(1, 0, 0, 30)
 statusBar.Position         = UDim2.new(0, 0, 0, toggleY + 56)
@@ -499,7 +497,7 @@ statusBar.Parent           = body
 makeCorner(statusBar, 8)
 makeStroke(statusBar, C.border, 1)
 
--- Punto de color que indica visualmente el estado del farm
+-- Punto de color que indica visualmente si el farm esta activo o detenido
 local statusDot = Instance.new("Frame")
 statusDot.Size             = UDim2.new(0, 8, 0, 8)
 statusDot.Position         = UDim2.new(0, 10, 0.5, -4)
@@ -508,7 +506,7 @@ statusDot.BorderSizePixel  = 0
 statusDot.Parent           = statusBar
 makeCorner(statusDot, 4)
 
--- Texto que describe el estado actual del farm
+-- Texto que describe el estado actual del farm al usuario
 local statusLabel = Instance.new("TextLabel")
 statusLabel.Text           = "Pronto para iniciar"
 statusLabel.Size           = UDim2.new(1, -28, 1, 0)
@@ -520,13 +518,13 @@ statusLabel.TextSize       = 11
 statusLabel.TextXAlignment = Enum.TextXAlignment.Left
 statusLabel.Parent         = statusBar
 
--- Actualiza el mensaje y el color del indicador de estado
+-- Actualiza el texto y el color del indicador de estado
 local function setStatus(msg, dotColor)
     statusLabel.Text           = msg
     statusDot.BackgroundColor3 = dotColor or C.textDim
 end
 
--- Boton flotante que aparece cuando la interfaz esta minimizada
+-- Boton flotante visible cuando la interfaz principal esta minimizada
 local floatBtn = Instance.new("TextButton")
 floatBtn.Text             = "🏃"
 floatBtn.Size             = UDim2.new(0, 52, 0, 52)
@@ -540,23 +538,22 @@ floatBtn.Parent           = screenGui
 makeCorner(floatBtn, 16)
 makeStroke(floatBtn, C.accentLight, 1.5)
 
--- Variables que controlan el estado del arrastre del boton flotante
+-- Variables del arrastre del boton flotante usando Vector2 para evitar deriva
 local floatDragging  = false
 local floatDragStart = nil
-local floatBtnStart  = nil
+local floatBtnStart  = nil   -- Vector2 con la posicion absoluta al inicio del arrastre
 local floatMoved     = false
 local DRAG_THRESHOLD = 6
 
--- Registra el inicio del toque o clic en el boton flotante para iniciar arrastre
+-- Registra el inicio del toque en el boton flotante sin mover su posicion todavia
 floatBtn.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1
     or input.UserInputType == Enum.UserInputType.Touch then
         floatDragging  = true
         floatMoved     = false
         floatDragStart = Vector2.new(input.Position.X, input.Position.Y)
-        -- Convierte a posicion absoluta para evitar bugs al arrastrar con escala
-        floatBtnStart  = UDim2.new(0, floatBtn.AbsolutePosition.X, 0, floatBtn.AbsolutePosition.Y)
-        floatBtn.Position = floatBtnStart
+        -- Guarda la posicion absoluta actual sin cambiar floatBtn.Position
+        floatBtnStart  = Vector2.new(floatBtn.AbsolutePosition.X, floatBtn.AbsolutePosition.Y)
     end
 end)
 
@@ -566,18 +563,18 @@ minBtn.MouseButton1Click:Connect(function()
     floatBtn.Visible  = true
 end)
 
--- Variables que controlan el estado del arrastre de la interfaz principal
+-- Variables del arrastre de la interfaz principal
 local dragging   = false
 local dragStart  = nil
 local frameStart = nil
 
--- Registra el inicio del arrastre de la GUI al tocar o hacer clic en el encabezado
+-- Registra el inicio del arrastre de la interfaz al tocar el encabezado
 header.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1
     or input.UserInputType == Enum.UserInputType.Touch then
         dragging  = true
         dragStart = Vector2.new(input.Position.X, input.Position.Y)
-        -- Convierte a coordenadas absolutas para arrastrar sin bug de escala
+        -- Convierte a posicion absoluta para arrastrar sin bug de escala
         mainFrame.Position = UDim2.new(0, mainFrame.AbsolutePosition.X, 0, mainFrame.AbsolutePosition.Y)
         frameStart = mainFrame.Position
     end
@@ -587,11 +584,8 @@ end)
 UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1
     or input.UserInputType == Enum.UserInputType.Touch then
-
-        -- Detiene el arrastre de la interfaz principal
         dragging = false
-
-        -- Si el boton flotante no se movio se trata como clic y abre la GUI
+        -- Si el boton flotante no se movio se trata como clic y reabre la GUI
         if floatDragging then
             if not floatMoved then
                 mainFrame.Visible = true
@@ -603,7 +597,7 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- Mueve la GUI principal o el boton flotante segun cual se esta arrastrando
+-- Mueve la GUI principal o el boton flotante segun cual esta siendo arrastrado
 UserInputService.InputChanged:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseMovement
     or input.UserInputType == Enum.UserInputType.Touch then
@@ -618,7 +612,7 @@ UserInputService.InputChanged:Connect(function(input)
             )
         end
 
-        -- Arrastre del boton flotante con limites de pantalla para no salir
+        -- Arrastre del boton flotante con limites de pantalla para no salirse
         if floatDragging and floatDragStart and floatBtnStart then
             local delta = pos - floatDragStart
             if delta.Magnitude > DRAG_THRESHOLD then
@@ -627,8 +621,8 @@ UserInputService.InputChanged:Connect(function(input)
             if floatMoved then
                 local screen  = Workspace.CurrentCamera.ViewportSize
                 local btnSize = floatBtn.AbsoluteSize
-                local newX = math.clamp(floatBtnStart.X.Offset + delta.X, 0, screen.X - btnSize.X)
-                local newY = math.clamp(floatBtnStart.Y.Offset + delta.Y, 0, screen.Y - btnSize.Y)
+                local newX = math.clamp(floatBtnStart.X + delta.X, 0, screen.X - btnSize.X)
+                local newY = math.clamp(floatBtnStart.Y + delta.Y, 0, screen.Y - btnSize.Y)
                 floatBtn.Position = UDim2.new(0, newX, 0, newY)
             end
         end
@@ -650,14 +644,26 @@ local function findTreadmillPart(pos)
     return nil
 end
 
--- Detiene el farm desconectando el Heartbeat y el listener de fuerza
+-- Teleporta al jugador de vuelta a la posicion guardada antes del farm
+local function returnToSaved()
+    local char = player.Character
+    if char and savedPosition then
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if root then
+            root.CFrame = savedPosition
+        end
+    end
+    savedPosition = nil
+end
+
+-- Detiene el farm desconectando todos los eventos activos
 local function stopFarming()
     stopRequested = true
     if heartbeatConn then heartbeatConn:Disconnect(); heartbeatConn = nil end
     if strengthConn  then strengthConn:Disconnect();  strengthConn  = nil end
 end
 
--- Cambia el aspecto visual del boton segun si el farm esta activo o detenido
+-- Cambia el aspecto visual del boton segun si el farm esta activo o no
 local function setToggleState(running)
     if running then
         toggleGrad.Color = ColorSequence.new({
@@ -682,7 +688,7 @@ end
 -- Inicia o detiene el farm dependiendo del estado actual
 local function toggleFarming()
 
-    -- Detiene el farm activo y restaura el movimiento del personaje
+    -- Detiene el farm activo, restaura el personaje y retorna a la posicion guardada
     if isRunning then
         stopFarming()
         local char = player.Character
@@ -692,6 +698,7 @@ local function toggleFarming()
             if hum  then hum.AutoRotate = true end
             if root then root.AssemblyLinearVelocity = Vector3.zero end
         end
+        returnToSaved()
         targetCFrameGlobal = nil
         isRunning = false
         setToggleState(false)
@@ -699,7 +706,7 @@ local function toggleFarming()
         return
     end
 
-    -- Inicia el farm validando XP y ubicando al personaje en la caminadora
+    -- Inicia el farm validando los datos y ubicando al personaje en la caminadora
     isRunning     = true
     stopRequested = false
 
@@ -723,19 +730,26 @@ local function toggleFarming()
     local humanoid = char:WaitForChild("Humanoid")
     local rootPart = char:WaitForChild("HumanoidRootPart")
 
-    -- Lee la caminadora seleccionada y su rotacion especifica
+    -- Guarda la posicion actual antes de mover al jugador a la caminadora
+    savedPosition = rootPart.CFrame
+
     local data          = treadmillData[selectedIndex]
     local rotY          = data.rotY or 180
     local treadmillPart = findTreadmillPart(data.pos)
     local targetCFrame
+    local fallbackPos   = data.pos + Vector3.new(0, humanoid.HipHeight + OFFSET_Y, 0)
 
-    -- Calcula el CFrame con la rotacion correcta segun la caminadora elegida
-    if treadmillPart then
+    -- Calcula el CFrame segun si la caminadora usa rotacion mundial o relativa a la pieza
+    if data.useWorldRot then
+        -- Rotacion absoluta en espacio mundial para caminadoras 7 y 8
+        targetCFrame = CFrame.new(fallbackPos) * CFrame.Angles(0, math.rad(rotY), 0)
+    elseif treadmillPart then
+        -- Rotacion relativa a la orientacion de la pieza de la caminadora
         targetCFrame = treadmillPart.CFrame
             * CFrame.Angles(0, math.rad(rotY), 0)
             * CFrame.new(0, humanoid.HipHeight + OFFSET_Y, 0)
     else
-        local fallbackPos = data.pos + Vector3.new(0, humanoid.HipHeight + OFFSET_Y, 0)
+        -- Posicion de respaldo cuando no se encuentra la pieza de la caminadora
         targetCFrame = CFrame.new(fallbackPos, fallbackPos + Vector3.new(0, 0, -1))
     end
 
@@ -744,15 +758,22 @@ local function toggleFarming()
     humanoid.AutoRotate = false
     task.wait(0.1)
 
-    -- Busca el stat de fuerza en los leaderstats del jugador
+    -- Busca el stat de Agilidade o Fuerza en los leaderstats del jugador
+    -- La esteira da Agilidade, no Strength, por eso se incluyen los dos nombres
     local leaderstats = player:FindFirstChild("leaderstats") or player:FindFirstChild("PlayerStats")
-    local strength    = leaderstats and (
-        leaderstats:FindFirstChild("Strength") or leaderstats:FindFirstChild("Power")
+    local strength = leaderstats and (
+        leaderstats:FindFirstChild("Agility")    or
+        leaderstats:FindFirstChild("Agilidade")  or
+        leaderstats:FindFirstChild("Strength")   or
+        leaderstats:FindFirstChild("Power")      or
+        leaderstats:FindFirstChild("Speed")      or
+        leaderstats:FindFirstChild("Running")
     )
 
     if not strength then
         setStatus("Stats não encontrados", C.red)
         humanoid.AutoRotate = true
+        returnToSaved()
         isRunning = false
         setToggleState(false)
         return
@@ -761,15 +782,15 @@ local function toggleFarming()
     lastStrengthValue = strength.Value
     local xpCount     = 0
 
-    -- Escucha los cambios en la fuerza para contar cada XP ganado
+    -- Cuenta cada ganancia de XP o Agilidade y para al alcanzar el objetivo
     strengthConn = strength:GetPropertyChangedSignal("Value"):Connect(function()
         if not isRunning or stopRequested then return end
         local newVal = strength.Value
         if newVal > lastStrengthValue then
             xpCount += 1
             lastStrengthValue = newVal
-            setStatus(string.format("XP ganho: %d / %d", xpCount, gains), C.green)
-            -- Detiene automaticamente el farm al alcanzar el objetivo de XP
+            setStatus(string.format("Ganho: %d / %d", xpCount, gains), C.green)
+            -- Detiene el farm automaticamente cuando se alcanza el limite de ganancias
             if xpCount >= gains then
                 stopFarming()
                 local c = player.Character
@@ -779,16 +800,17 @@ local function toggleFarming()
                     if hum2  then hum2.AutoRotate = true end
                     if root2 then root2.AssemblyLinearVelocity = Vector3.zero end
                 end
+                returnToSaved()
                 targetCFrameGlobal = nil
                 isRunning = false
                 setToggleState(false)
-                setStatus("✓ Concluído! " .. xpCount .. " XP ganhos", C.green)
+                setStatus("✓ Concluído! " .. xpCount .. " ganhos", C.green)
             end
         end
         lastStrengthValue = newVal
     end)
 
-    -- Mantiene el personaje fijo sobre la caminadora en cada frame del juego
+    -- Mantiene al personaje fijo sobre la caminadora en cada frame del juego
     heartbeatConn = RunService.Heartbeat:Connect(function()
         if not isRunning or stopRequested then return end
         local c = player.Character
@@ -801,18 +823,19 @@ local function toggleFarming()
         hum2.WalkSpeed = 16
     end)
 
-    setStatus(string.format("Correndo — meta: %d XP", gains), C.green)
+    setStatus(string.format("Correndo — meta: %d ganhos", gains), C.green)
 end
 
--- Conecta el boton principal con la funcion que inicia o detiene el farm
+-- Conecta el boton principal con la funcion de inicio y parada del farm
 toggleBtn.MouseButton1Click:Connect(toggleFarming)
 
--- Detiene el farm automaticamente si el personaje muere o reaparece
+-- Detiene el farm y retorna a la posicion guardada si el personaje respawnea
 player.CharacterAdded:Connect(function()
     if isRunning then
         stopFarming()
         isRunning          = false
         targetCFrameGlobal = nil
+        savedPosition      = nil
         setToggleState(false)
         setStatus("Respawnado — farm pausado", C.red)
     end
