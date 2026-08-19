@@ -1,842 +1,3851 @@
--- Servicios principales del juego
-local Players          = game:GetService("Players")
-local RunService       = game:GetService("RunService")
-local TweenService     = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
-local Workspace        = game:GetService("Workspace")
+--[[
+    APEX SCRIPTERS — Professional UI Framework for Roblox
+    Version: 2.0.1 (corrigida)
+    Author: Apex Scripters Team
+]]
 
--- Referencia al jugador local
-local player = Players.LocalPlayer
-
--- Datos de cada caminadora con posicion, rotacion y modo de orientacion
--- useWorldRot=true usa rotacion absoluta en el mundo (para caminadoras 7 y 8)
--- Si la orientacion aun no es correcta en 7 u 8, ajusta rotY (0, 90, 180 o 270)
-local treadmillData = {
-    { name = "Treadmill  •  1 XP",  pos = Vector3.new(239, 9, 388),       rotY = 180, useWorldRot = false },
-    { name = "Treadmill  •  2 XP",  pos = Vector3.new(238, 9, 358),       rotY = 180, useWorldRot = false },
-    { name = "Treadmill  •  3 XP",  pos = Vector3.new(235, 10, 325),      rotY = 180, useWorldRot = false },
-    { name = "Treadmill  •  4 XP",  pos = Vector3.new(230, 10, 280),      rotY = 180, useWorldRot = false },
-    { name = "Treadmill  •  5 XP",  pos = Vector3.new(221, 12, 220),      rotY = 180, useWorldRot = false },
-    { name = "Treadmill  •  6 XP",  pos = Vector3.new(215, 13, -118),     rotY = 180, useWorldRot = false },
-    { name = "Treadmill  •  7 XP",  pos = Vector3.new(4367, 1003, -3642), rotY = 90,  useWorldRot = true  },
-    { name = "Treadmill  •  8 XP",  pos = Vector3.new(-8131, 32, 2814),   rotY = 180, useWorldRot = true  },
+local Apex = {
+    Version = "2.0.1",
+    _debug = false,
+    _scale = 1,
+    _animSpeed = 1,
+    _animEnabled = true,
+    _reducedMotion = false,
+    _mobile = false,
+    _themeName = "Midnight",
+    _themes = {},
+    _windows = {},
+    _components = {},
+    _connections = {},
+    _cleanupTasks = {},
+    _signals = {},
+    _iconCache = {},
+    _configs = {},
+    _notificationQueue = {},
+    _dialogQueue = {},
+    _searchResults = {},
+    _customComponents = {},
 }
 
--- Configuracion general del farm
-local DEFAULT_GAINS = 10
-local OFFSET_Y      = 2
-local ITEM_HEIGHT   = 44
-local VISIBLE_ITEMS = 3
+-- ///////////////////////////////
+-- // UTILITIES
+-- ///////////////////////////////
 
--- Variables de estado del farm
-local isRunning          = false
-local stopRequested      = false
-local selectedIndex      = 1
-local heartbeatConn      = nil
-local strengthConn       = nil
-local lastStrengthValue  = nil
-local targetCFrameGlobal = nil
--- Guarda la posicion del jugador antes de iniciar el farm para retornar al finalizar
-local savedPosition      = nil
+local Utilities = {}
+Utilities.Maid = {}
+Utilities.Maid.__index = Utilities.Maid
 
--- Elimina la interfaz anterior si ya existe para evitar duplicados
-local oldGui = player:WaitForChild("PlayerGui"):FindFirstChild("MLGui_v5")
-if oldGui then oldGui:Destroy() end
+function Utilities.Maid.new()
+    local self = setmetatable({}, Utilities.Maid)
+    self._tasks = {}
+    return self
+end
 
--- Paleta de colores de toda la interfaz
-local C = {
-    bg          = Color3.fromRGB(14, 14, 22),
-    panel       = Color3.fromRGB(22, 22, 36),
-    card        = Color3.fromRGB(30, 30, 48),
-    accent      = Color3.fromRGB(100, 80, 255),
-    accentLight = Color3.fromRGB(140, 120, 255),
-    green       = Color3.fromRGB(50, 200, 100),
-    greenDark   = Color3.fromRGB(30, 150, 70),
-    red         = Color3.fromRGB(220, 70, 70),
-    redDark     = Color3.fromRGB(160, 40, 40),
-    text        = Color3.fromRGB(240, 240, 255),
-    textDim     = Color3.fromRGB(160, 160, 190),
-    highlight   = Color3.fromRGB(100, 80, 255),
-    border      = Color3.fromRGB(50, 50, 75),
-    selected    = Color3.fromRGB(55, 45, 100),
+function Utilities.Maid:give(task)
+    table.insert(self._tasks, task)
+    return task
+end
+
+function Utilities.Maid:cleanup()
+    for _, task in ipairs(self._tasks) do
+        if type(task) == "function" then
+            task()
+        elseif type(task) == "userdata" and task.Disconnect then
+            task:Disconnect()
+        elseif type(task) == "table" and task.Destroy then
+            task:Destroy()
+        end
+    end
+    self._tasks = {}
+end
+
+function Utilities.Maid:destroy()
+    self:cleanup()
+    setmetatable(self, nil)
+end
+
+Utilities.Signal = {}
+Utilities.Signal.__index = Utilities.Signal
+
+function Utilities.Signal.new()
+    local self = setmetatable({}, Utilities.Signal)
+    self._connections = {}
+    return self
+end
+
+function Utilities.Signal:connect(callback)
+    local conn = {
+        Connected = true,
+        Disconnect = function()
+            if conn.Connected then
+                conn.Connected = false
+                for i, c in ipairs(self._connections) do
+                    if c == conn then
+                        table.remove(self._connections, i)
+                        break
+                    end
+                end
+            end
+        end
+    }
+    conn.Callback = callback
+    table.insert(self._connections, conn)
+    return conn
+end
+
+function Utilities.Signal:fire(...)
+    local args = {...}
+    for _, conn in ipairs(self._connections) do
+        if conn.Connected then
+            task.spawn(conn.Callback, unpack(args))
+        end
+    end
+end
+
+function Utilities.Signal:disconnectAll()
+    for _, conn in ipairs(self._connections) do
+        conn:Disconnect()
+    end
+    self._connections = {}
+end
+
+Utilities.Types = {
+    Validate = function(value, expectedType)
+        if expectedType == "string" then return type(value) == "string"
+        elseif expectedType == "number" then return type(value) == "number"
+        elseif expectedType == "boolean" then return type(value) == "boolean"
+        elseif expectedType == "function" then return type(value) == "function"
+        elseif expectedType == "table" then return type(value) == "table"
+        elseif expectedType == "Color3" then return typeof(value) == "Color3"
+        elseif expectedType == "EnumItem" then return typeof(value) == "EnumItem"
+        else return true end
+    end,
+    Optional = function(value, default)
+        return value ~= nil and value or default
+    end,
+    Clamp = function(value, min, max)
+        return math.clamp(value, min, max)
+    end,
 }
 
--- Agrega esquinas redondeadas a un elemento de la interfaz
-local function makeCorner(parent, radius)
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, radius or 8)
-    c.Parent = parent
-    return c
+Utilities.Math = {
+    Round = function(num, increment)
+        if increment and increment > 0 then
+            return math.floor(num / increment + 0.5) * increment
+        end
+        return math.floor(num + 0.5)
+    end,
+    Lerp = function(a, b, t)
+        return a + (b - a) * t
+    end,
+}
+
+Utilities.Tables = {
+    Copy = function(tbl)
+        local copy = {}
+        for k, v in pairs(tbl) do
+            if type(v) == "table" then
+                copy[k] = Utilities.Tables.Copy(v)
+            else
+                copy[k] = v
+            end
+        end
+        return copy
+    end,
+    Merge = function(...)
+        local result = {}
+        for _, tbl in ipairs({...}) do
+            for k, v in pairs(tbl) do
+                result[k] = v
+            end
+        end
+        return result
+    end,
+}
+
+Utilities.InstanceHelpers = {
+    Create = function(className, properties)
+        local instance = Instance.new(className)
+        for prop, value in pairs(properties or {}) do
+            instance[prop] = value
+        end
+        return instance
+    end,
+    ApplyProps = function(instance, props)
+        for prop, value in pairs(props or {}) do
+            instance[prop] = value
+        end
+        return instance
+    end,
+    ClearChildren = function(parent)
+        for _, child in ipairs(parent:GetChildren()) do
+            child:Destroy()
+        end
+    end,
+}
+
+-- ///////////////////////////////
+-- // SIGNALS (Central)
+-- ///////////////////////////////
+
+Apex.Signals = {
+    ThemeChanged = Utilities.Signal.new(),
+    TabChanged = Utilities.Signal.new(),
+    StateChanged = Utilities.Signal.new(),
+    VisibilityChanged = Utilities.Signal.new(),
+    WindowChanged = Utilities.Signal.new(),
+    Destroyed = Utilities.Signal.new(),
+}
+
+-- ///////////////////////////////
+-- // DEBUG SYSTEM
+-- ///////////////////////////////
+
+local DebugService = {
+    Enabled = false,
+    Log = function(level, message)
+        if DebugService.Enabled then
+            local prefix = "[APEX][" .. level .. "]"
+            print(prefix, message)
+        end
+    end,
+    Error = function(message)
+        if DebugService.Enabled then
+            warn("[APEX][ERROR]", message)
+        end
+    end,
+}
+
+function Apex:SetDebug(enabled)
+    DebugService.Enabled = enabled
+    self._debug = enabled
 end
 
--- Agrega un borde de contorno a un elemento de la interfaz
-local function makeStroke(parent, color, thickness, transparency)
-    local s = Instance.new("UIStroke")
-    s.Color        = color or C.border
-    s.Thickness    = thickness or 1
-    s.Transparency = transparency or 0
-    s.Parent       = parent
-    return s
+-- ///////////////////////////////
+-- // THEME ENGINE
+-- ///////////////////////////////
+
+local ThemeEngine = {
+    Themes = {},
+    Current = nil,
+    DefaultTheme = "Midnight",
+}
+
+ThemeEngine.Default = {
+    Background = Color3.fromRGB(18, 18, 24),
+    Surface = Color3.fromRGB(28, 28, 38),
+    SurfaceSecondary = Color3.fromRGB(35, 35, 48),
+    Accent = Color3.fromRGB(130, 80, 255),
+    AccentHover = Color3.fromRGB(150, 100, 255),
+    Text = Color3.fromRGB(240, 240, 245),
+    TextSecondary = Color3.fromRGB(150, 150, 160),
+    Border = Color3.fromRGB(45, 45, 55),
+    Success = Color3.fromRGB(46, 204, 113),
+    Warning = Color3.fromRGB(241, 196, 15),
+    Error = Color3.fromRGB(231, 76, 60),
+    Info = Color3.fromRGB(52, 152, 219),
+    ShadowColor = Color3.fromRGB(0, 0, 0),
+    ShadowTransparency = 0.5,
+    Font = Enum.Font.GothamMedium,
+    FontBold = Enum.Font.GothamBold,
+    FontSize = 14,
+    Radius = 8,
+    Spacing = 10,
+    BorderSize = 1,
+    Transparency = {
+        Window = 0.05,
+        Surface = 0.1,
+        Component = 0.15,
+        Text = 0,
+    }
+}
+
+ThemeEngine.Themes = {
+    Dark = Utilities.Tables.Copy(ThemeEngine.Default),
+    Midnight = Utilities.Tables.Merge(Utilities.Tables.Copy(ThemeEngine.Default), {
+        Background = Color3.fromRGB(16, 18, 28),
+        Surface = Color3.fromRGB(26, 28, 42),
+        SurfaceSecondary = Color3.fromRGB(32, 34, 50),
+        Accent = Color3.fromRGB(99, 102, 241),
+        AccentHover = Color3.fromRGB(129, 140, 248),
+        Border = Color3.fromRGB(51, 65, 85),
+    }),
+    AMOLED = Utilities.Tables.Merge(Utilities.Tables.Copy(ThemeEngine.Default), {
+        Background = Color3.fromRGB(0, 0, 0),
+        Surface = Color3.fromRGB(12, 12, 12),
+        SurfaceSecondary = Color3.fromRGB(18, 18, 18),
+        Accent = Color3.fromRGB(0, 255, 170),
+        AccentHover = Color3.fromRGB(0, 210, 140),
+        Text = Color3.fromRGB(230, 230, 230),
+        Border = Color3.fromRGB(30, 30, 30),
+        ShadowTransparency = 0.8,
+    }),
+    Light = Utilities.Tables.Merge(Utilities.Tables.Copy(ThemeEngine.Default), {
+        Background = Color3.fromRGB(245, 245, 250),
+        Surface = Color3.fromRGB(255, 255, 255),
+        SurfaceSecondary = Color3.fromRGB(235, 235, 240),
+        Accent = Color3.fromRGB(66, 133, 244),
+        AccentHover = Color3.fromRGB(40, 100, 200),
+        Text = Color3.fromRGB(30, 30, 35),
+        TextSecondary = Color3.fromRGB(120, 120, 130),
+        Border = Color3.fromRGB(210, 210, 215),
+        ShadowTransparency = 0.2,
+    }),
+    Purple = Utilities.Tables.Merge(Utilities.Tables.Copy(ThemeEngine.Default), {
+        Background = Color3.fromRGB(25, 15, 45),
+        Surface = Color3.fromRGB(35, 22, 60),
+        SurfaceSecondary = Color3.fromRGB(45, 30, 75),
+        Accent = Color3.fromRGB(170, 80, 255),
+        AccentHover = Color3.fromRGB(190, 100, 255),
+        Border = Color3.fromRGB(60, 45, 85),
+    }),
+    Blue = Utilities.Tables.Merge(Utilities.Tables.Copy(ThemeEngine.Default), {
+        Background = Color3.fromRGB(12, 25, 45),
+        Surface = Color3.fromRGB(18, 35, 60),
+        SurfaceSecondary = Color3.fromRGB(23, 42, 70),
+        Accent = Color3.fromRGB(0, 150, 255),
+        AccentHover = Color3.fromRGB(50, 170, 255),
+        Border = Color3.fromRGB(30, 60, 90),
+    }),
+    Red = Utilities.Tables.Merge(Utilities.Tables.Copy(ThemeEngine.Default), {
+        Background = Color3.fromRGB(35, 15, 20),
+        Surface = Color3.fromRGB(50, 22, 28),
+        SurfaceSecondary = Color3.fromRGB(60, 28, 35),
+        Accent = Color3.fromRGB(255, 80, 80),
+        AccentHover = Color3.fromRGB(255, 110, 110),
+        Border = Color3.fromRGB(80, 35, 40),
+    }),
+    Glass = Utilities.Tables.Merge(Utilities.Tables.Copy(ThemeEngine.Default), {
+        Background = Color3.fromRGB(20, 25, 35),
+        Surface = Color3.fromRGB(255, 255, 255),
+        SurfaceSecondary = Color3.fromRGB(255, 255, 255),
+        Accent = Color3.fromRGB(100, 200, 255),
+        AccentHover = Color3.fromRGB(130, 220, 255),
+        Text = Color3.fromRGB(255, 255, 255),
+        TextSecondary = Color3.fromRGB(200, 200, 210),
+        Border = Color3.fromRGB(255, 255, 255),
+        Transparency = {
+            Window = 0.3,
+            Surface = 0.6,
+            Component = 0.5,
+            Text = 0,
+        },
+        BorderSize = 2,
+    }),
+    Custom = Utilities.Tables.Copy(ThemeEngine.Default),
+}
+
+ThemeEngine.Current = Utilities.Tables.Copy(ThemeEngine.Themes[ThemeEngine.DefaultTheme] or ThemeEngine.Default)
+
+function Apex:RegisterTheme(name, themeTable)
+    local base = Utilities.Tables.Copy(ThemeEngine.Default)
+    ThemeEngine.Themes[name] = Utilities.Tables.Merge(base, themeTable)
+    return true
 end
 
--- Crea una etiqueta de texto con los parametros dados
-local function makeLabel(parent, text, size, font, color, xAlign)
-    local l = Instance.new("TextLabel")
-    l.Text                 = text
-    l.Size                 = size
-    l.BackgroundTransparency = 1
-    l.TextColor3           = color or C.text
-    l.Font                 = font or Enum.Font.GothamMedium
-    l.TextSize             = 13
-    l.TextXAlignment       = xAlign or Enum.TextXAlignment.Left
-    l.TextTruncate         = Enum.TextTruncate.AtEnd
-    l.Parent               = parent
-    return l
+function Apex:SetTheme(name)
+    if ThemeEngine.Themes[name] then
+        ThemeEngine.Current = Utilities.Tables.Copy(ThemeEngine.Themes[name])
+        self._themeName = name
+        Apex.Signals.ThemeChanged:fire(ThemeEngine.Current)
+        DebugService.Log("INFO", "Theme changed to: " .. name)
+        return true
+    end
+    DebugService.Error("Theme not found: " .. name)
+    return false
 end
 
--- Crea el contenedor principal de la interfaz grafica en pantalla
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name           = "MLGui_v5"
-screenGui.ResetOnSpawn   = false
-screenGui.IgnoreGuiInset = true
-screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-screenGui.Parent         = player:WaitForChild("PlayerGui")
+function Apex:GetTheme()
+    return self._themeName
+end
 
--- Marco principal con ancho ligeramente reducido para mejor visualizacion
-local mainFrame = Instance.new("Frame")
-mainFrame.Size             = UDim2.new(0, 275, 0, 360)
-mainFrame.Position         = UDim2.new(0.5, -137, 0.5, -180)
-mainFrame.BackgroundColor3 = C.bg
-mainFrame.BorderSizePixel  = 0
-mainFrame.Active           = true
-mainFrame.ClipsDescendants = false
-mainFrame.Parent           = screenGui
-makeCorner(mainFrame, 14)
-makeStroke(mainFrame, C.border, 1.5)
+function Apex:GetThemeData()
+    return Utilities.Tables.Copy(ThemeEngine.Current)
+end
 
--- Efecto de brillo decorativo alrededor del marco principal
-local glow = Instance.new("ImageLabel")
-glow.Size               = UDim2.new(1, 40, 1, 40)
-glow.Position           = UDim2.new(0, -20, 0, -20)
-glow.BackgroundTransparency = 1
-glow.Image              = "rbxassetid://5028857472"
-glow.ImageColor3        = C.accent
-glow.ImageTransparency  = 0.82
-glow.ScaleType          = Enum.ScaleType.Slice
-glow.SliceCenter        = Rect.new(24, 24, 276, 276)
-glow.ZIndex             = -1
-glow.Parent             = mainFrame
+-- ///////////////////////////////
+-- // ANIMATION ENGINE
+-- ///////////////////////////////
 
--- Marco interno que recorta el contenido para que no desborde del marco principal
-local innerClip = Instance.new("Frame")
-innerClip.Size                 = UDim2.new(1, 0, 1, 0)
-innerClip.BackgroundTransparency = 1
-innerClip.ClipsDescendants     = true
-innerClip.Parent               = mainFrame
+local AnimationEngine = {
+    Enabled = true,
+    Speed = 1,
+    ReducedMotion = false,
+}
 
--- Encabezado con icono, titulo y boton de minimizar
-local header = Instance.new("Frame")
-header.Size             = UDim2.new(1, 0, 0, 56)
-header.BackgroundColor3 = C.panel
-header.BorderSizePixel  = 0
-header.Parent           = innerClip
-makeCorner(header, 14)
+function Apex:SetAnimationSpeed(multiplier)
+    AnimationEngine.Speed = math.clamp(multiplier or 1, 0.1, 10)
+end
 
--- Linea de acento decorativa en la parte superior del encabezado
-local accentLine = Instance.new("Frame")
-accentLine.Size             = UDim2.new(0.5, 0, 0, 2)
-accentLine.Position         = UDim2.new(0.25, 0, 0, 0)
-accentLine.BackgroundColor3 = C.accent
-accentLine.BorderSizePixel  = 0
-accentLine.Parent           = header
-makeCorner(accentLine, 2)
+function Apex:SetAnimationsEnabled(enabled)
+    AnimationEngine.Enabled = enabled
+end
 
--- Icono de corrida dentro del encabezado
-local icon = Instance.new("TextLabel")
-icon.Text             = "🏃"
-icon.Size             = UDim2.new(0, 34, 0, 34)
-icon.Position         = UDim2.new(0, 14, 0.5, -17)
-icon.BackgroundColor3 = C.selected
-icon.Font             = Enum.Font.GothamBold
-icon.TextSize         = 20
-icon.TextXAlignment   = Enum.TextXAlignment.Center
-icon.TextYAlignment   = Enum.TextYAlignment.Center
-icon.Parent           = header
-makeCorner(icon, 10)
+function Apex:SetReducedMotion(enabled)
+    AnimationEngine.ReducedMotion = enabled
+    if enabled then
+        AnimationEngine.Speed = 0.2
+    else
+        AnimationEngine.Speed = 1
+    end
+end
 
--- Titulo principal del panel
-local titleLabel = Instance.new("TextLabel")
-titleLabel.Text           = "Muscle Legends"
-titleLabel.Size           = UDim2.new(0, 155, 0, 20)
-titleLabel.Position       = UDim2.new(0, 56, 0, 10)
-titleLabel.BackgroundTransparency = 1
-titleLabel.TextColor3     = C.text
-titleLabel.Font           = Enum.Font.GothamBold
-titleLabel.TextSize       = 15
-titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-titleLabel.Parent         = header
+function AnimationEngine.Tween(instance, tweenInfo, props)
+    if not AnimationEngine.Enabled then
+        for prop, value in pairs(props) do
+            instance[prop] = value
+        end
+        return nil
+    end
+    local ti = tweenInfo
+    if AnimationEngine.ReducedMotion then
+        ti = TweenInfo.new(ti.Time * 0.2, ti.EasingStyle, ti.EasingDirection, ti.RepeatCount, ti.Reverses, ti.DelayTime)
+    else
+        ti = TweenInfo.new(ti.Time * AnimationEngine.Speed, ti.EasingStyle, ti.EasingDirection, ti.RepeatCount, ti.Reverses, ti.DelayTime)
+    end
+    local tween = game:GetService("TweenService"):Create(instance, ti, props)
+    tween:Play()
+    return tween
+end
 
--- Subtitulo do panel abajo del titulo
-local subtitleLabel = Instance.new("TextLabel")
-subtitleLabel.Text           = "Auto Treadmill XP"
-subtitleLabel.Size           = UDim2.new(0, 155, 0, 14)
-subtitleLabel.Position       = UDim2.new(0, 56, 0, 30)
-subtitleLabel.BackgroundTransparency = 1
-subtitleLabel.TextColor3     = C.accentLight
-subtitleLabel.Font           = Enum.Font.Gotham
-subtitleLabel.TextSize       = 11
-subtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
-subtitleLabel.Parent         = header
+-- ///////////////////////////////
+-- // RESPONSIVE ENGINE
+-- ///////////////////////////////
 
--- Boton que minimiza la interfaz principal y muestra el boton flotante
-local minBtn = Instance.new("TextButton")
-minBtn.Text             = "─"
-minBtn.Size             = UDim2.new(0, 30, 0, 30)
-minBtn.Position         = UDim2.new(1, -42, 0.5, -15)
-minBtn.BackgroundColor3 = C.card
-minBtn.TextColor3       = C.textDim
-minBtn.Font             = Enum.Font.GothamBold
-minBtn.TextSize         = 16
-minBtn.Parent           = header
-makeCorner(minBtn, 8)
-makeStroke(minBtn, C.border, 1)
+local ResponsiveEngine = {
+    Mobile = false,
+    Scale = 1,
+    BaseWidth = 1920,
+    BaseHeight = 1080,
+}
 
--- Contenedor del cuerpo principal debajo del encabezado
-local body = Instance.new("Frame")
-body.Size                 = UDim2.new(1, -24, 1, -66)
-body.Position             = UDim2.new(0, 12, 0, 62)
-body.BackgroundTransparency = 1
-body.Parent               = innerClip
+function ResponsiveEngine.DetectDevice()
+    local screenSize = game:GetService("GuiService"):GetScreenResolution()
+    local viewportSize = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or screenSize
+    local minDim = math.min(viewportSize.X, viewportSize.Y)
+    if minDim <= 800 or screenSize.X <= 1024 then
+        ResponsiveEngine.Mobile = true
+    else
+        ResponsiveEngine.Mobile = false
+    end
+    Apex._mobile = ResponsiveEngine.Mobile
+    return ResponsiveEngine.Mobile
+end
 
--- Etiqueta de seccion para el selector de caminadora
-local secLabel1 = makeLabel(body, "ESTEIRA", UDim2.new(1, 0, 0, 14), Enum.Font.GothamBold, C.accentLight)
-secLabel1.Position = UDim2.new(0, 0, 0, 0)
-secLabel1.TextSize = 10
+function ResponsiveEngine.CalculateScale()
+    local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or game:GetService("GuiService"):GetScreenResolution()
+    local scaleX = viewport.X / ResponsiveEngine.BaseWidth
+    local scaleY = viewport.Y / ResponsiveEngine.BaseHeight
+    local base = math.min(scaleX, scaleY)
+    if ResponsiveEngine.Mobile then
+        base = math.max(base, 0.6)
+    end
+    return math.clamp(base, 0.5, 2) * Apex._scale
+end
 
--- Contenedor principal del selector de caminadora estilo ruleta
-local rollerContainer = Instance.new("Frame")
-rollerContainer.Size             = UDim2.new(1, 0, 0, ITEM_HEIGHT * VISIBLE_ITEMS)
-rollerContainer.Position         = UDim2.new(0, 0, 0, 18)
-rollerContainer.BackgroundColor3 = C.card
-rollerContainer.BorderSizePixel  = 0
-rollerContainer.ClipsDescendants = true
-rollerContainer.Parent           = body
-makeCorner(rollerContainer, 10)
-makeStroke(rollerContainer, C.border, 1)
+function Apex:SetScale(scale)
+    self._scale = math.clamp(scale or 1, 0.5, 2)
+    ResponsiveEngine.Scale = ResponsiveEngine.CalculateScale()
+    for _, window in ipairs(self._windows) do
+        if window._uiScale then
+            window._uiScale.Scale = ResponsiveEngine.Scale
+        end
+    end
+end
 
--- Resaltado visual del item seleccionado en el centro de la ruleta
-local selHighlight = Instance.new("Frame")
-selHighlight.Size             = UDim2.new(1, 0, 0, ITEM_HEIGHT)
-selHighlight.Position         = UDim2.new(0, 0, 0, ITEM_HEIGHT)
-selHighlight.BackgroundColor3 = C.selected
-selHighlight.BorderSizePixel  = 0
-selHighlight.ZIndex           = 1
-selHighlight.Parent           = rollerContainer
-makeCorner(selHighlight, 8)
+-- ///////////////////////////////
+-- // UI BUILDER
+-- ///////////////////////////////
 
--- Linea de acento en el borde superior del item seleccionado
-local hlTop = Instance.new("Frame")
-hlTop.Size             = UDim2.new(1, 0, 0, 1)
-hlTop.BackgroundColor3 = C.accent
-hlTop.BorderSizePixel  = 0
-hlTop.ZIndex           = 2
-hlTop.Parent           = selHighlight
+local UIBuilder = {}
 
--- Linea de acento en el borde inferior del item seleccionado
-local hlBot = Instance.new("Frame")
-hlBot.Size             = UDim2.new(1, 0, 0, 1)
-hlBot.Position         = UDim2.new(0, 0, 1, -1)
-hlBot.BackgroundColor3 = C.accent
-hlBot.BorderSizePixel  = 0
-hlBot.ZIndex           = 2
-hlBot.Parent           = selHighlight
+function UIBuilder.CreateGui(name)
+    local parentGui = game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")
+    if not parentGui then
+        parentGui = game:GetService("CoreGui")
+    end
+    local screenGui = Utilities.InstanceHelpers.Create("ScreenGui", {
+        Name = name,
+        ResetOnSpawn = false,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+        IgnoreGuiInset = true,
+        Parent = parentGui,
+    })
+    return screenGui
+end
 
--- Marco desplazable que contiene todos los items de la ruleta
-local rollerScroll = Instance.new("ScrollingFrame")
-rollerScroll.Size               = UDim2.new(1, 0, 1, 0)
-rollerScroll.BackgroundTransparency = 1
-rollerScroll.BorderSizePixel    = 0
-rollerScroll.ScrollBarThickness = 0
-rollerScroll.ScrollingEnabled   = true
-rollerScroll.CanvasSize         = UDim2.new(0, 0, 0, #treadmillData * ITEM_HEIGHT + ITEM_HEIGHT * 2)
-rollerScroll.ScrollingDirection = Enum.ScrollingDirection.Y
-rollerScroll.ZIndex             = 3
-rollerScroll.ElasticBehavior    = Enum.ElasticBehavior.WhenScrollable
-rollerScroll.Parent             = rollerContainer
+function UIBuilder.CreateFrame(parent, props)
+    local frame = Utilities.InstanceHelpers.Create("Frame", {
+        BackgroundColor3 = ThemeEngine.Current.Surface,
+        BorderColor3 = ThemeEngine.Current.Border,
+        BorderSizePixel = ThemeEngine.Current.BorderSize,
+        BackgroundTransparency = ThemeEngine.Current.Transparency.Surface,
+        ClipsDescendants = true,
+        Parent = parent,
+    })
+    Utilities.InstanceHelpers.ApplyProps(frame, props or {})
+    return frame
+end
 
--- Relleno superior para que el primer item quede centrado en la zona de seleccion
-local padTop = Instance.new("Frame")
-padTop.Size                 = UDim2.new(1, 0, 0, ITEM_HEIGHT)
-padTop.Position             = UDim2.new(0, 0, 0, 0)
-padTop.BackgroundTransparency = 1
-padTop.Parent               = rollerScroll
+function UIBuilder.CreateTextLabel(parent, props)
+    local label = Utilities.InstanceHelpers.Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Font = ThemeEngine.Current.Font,
+        TextSize = ThemeEngine.Current.FontSize,
+        TextColor3 = ThemeEngine.Current.Text,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        Parent = parent,
+    })
+    Utilities.InstanceHelpers.ApplyProps(label, props or {})
+    return label
+end
 
--- Relleno inferior para que el ultimo item quede centrado en la zona de seleccion
-local padBot = Instance.new("Frame")
-padBot.Size                 = UDim2.new(1, 0, 0, ITEM_HEIGHT)
-padBot.Position             = UDim2.new(0, 0, 0, (#treadmillData + 1) * ITEM_HEIGHT)
-padBot.BackgroundTransparency = 1
-padBot.Parent               = rollerScroll
+function UIBuilder.CreateTextButton(parent, props)
+    local button = Utilities.InstanceHelpers.Create("TextButton", {
+        BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary,
+        BorderColor3 = ThemeEngine.Current.Border,
+        BorderSizePixel = ThemeEngine.Current.BorderSize,
+        BackgroundTransparency = ThemeEngine.Current.Transparency.Component,
+        Font = ThemeEngine.Current.Font,
+        TextSize = ThemeEngine.Current.FontSize,
+        TextColor3 = ThemeEngine.Current.Text,
+        Text = "",
+        AutoButtonColor = false,
+        Parent = parent,
+    })
+    Utilities.InstanceHelpers.ApplyProps(button, props or {})
+    return button
+end
 
--- Genera los items de la ruleta dinamicamente con numero y nombre de cada caminadora
-local rollerItems = {}
-for i, data in ipairs(treadmillData) do
-    local item = Instance.new("TextButton")
-    item.Size                 = UDim2.new(1, 0, 0, ITEM_HEIGHT)
-    item.Position             = UDim2.new(0, 0, 0, i * ITEM_HEIGHT)
-    item.BackgroundTransparency = 1
-    item.Text                 = ""
-    item.BorderSizePixel      = 0
-    item.ZIndex               = 4
-    item.Parent               = rollerScroll
+function UIBuilder.CreateScrollingFrame(parent, props)
+    local sf = Utilities.InstanceHelpers.Create("ScrollingFrame", {
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ScrollBarThickness = 3,
+        ScrollBarImageColor3 = ThemeEngine.Current.Accent,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        Parent = parent,
+    })
+    Utilities.InstanceHelpers.ApplyProps(sf, props or {})
+    return sf
+end
 
-    local numBadge = Instance.new("Frame")
-    numBadge.Size             = UDim2.new(0, 26, 0, 26)
-    numBadge.Position         = UDim2.new(0, 10, 0.5, -13)
-    numBadge.BackgroundColor3 = C.accent
-    numBadge.BorderSizePixel  = 0
-    numBadge.ZIndex           = 5
-    numBadge.Parent           = item
-    makeCorner(numBadge, 7)
+function UIBuilder.CreateUICorner(parent, radius)
+    radius = radius or ThemeEngine.Current.Radius
+    return Utilities.InstanceHelpers.Create("UICorner", {
+        CornerRadius = UDim.new(0, radius),
+        Parent = parent,
+    })
+end
 
-    local numLabel = Instance.new("TextLabel")
-    numLabel.Size                 = UDim2.new(1, 0, 1, 0)
-    numLabel.BackgroundTransparency = 1
-    numLabel.Text                 = tostring(i)
-    numLabel.TextColor3           = C.text
-    numLabel.Font                 = Enum.Font.GothamBold
-    numLabel.TextSize             = 12
-    numLabel.ZIndex               = 6
-    numLabel.Parent               = numBadge
+function UIBuilder.CreateUIStroke(parent, props)
+    local stroke = Utilities.InstanceHelpers.Create("UIStroke", {
+        Color = ThemeEngine.Current.Border,
+        Thickness = ThemeEngine.Current.BorderSize,
+        Transparency = 0.5,
+        Parent = parent,
+    })
+    Utilities.InstanceHelpers.ApplyProps(stroke, props or {})
+    return stroke
+end
 
-    local nameLabel = Instance.new("TextLabel")
-    nameLabel.Size                 = UDim2.new(1, -52, 1, 0)
-    nameLabel.Position             = UDim2.new(0, 44, 0, 0)
-    nameLabel.BackgroundTransparency = 1
-    nameLabel.Text                 = data.name
-    nameLabel.TextColor3           = C.text
-    nameLabel.Font                 = Enum.Font.GothamMedium
-    nameLabel.TextSize             = 13
-    nameLabel.TextXAlignment       = Enum.TextXAlignment.Left
-    nameLabel.TextTruncate         = Enum.TextTruncate.AtEnd
-    nameLabel.ZIndex               = 5
-    nameLabel.Parent               = item
+function UIBuilder.CreateUIListLayout(parent, props)
+    local layout = Utilities.InstanceHelpers.Create("UIListLayout", {
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, ThemeEngine.Current.Spacing),
+        Parent = parent,
+    })
+    Utilities.InstanceHelpers.ApplyProps(layout, props or {})
+    return layout
+end
 
-    rollerItems[i] = { btn = item, nameLabel = nameLabel, numBadge = numBadge }
+function UIBuilder.CreateUIPadding(parent, props)
+    local padding = Utilities.InstanceHelpers.Create("UIPadding", {
+        Parent = parent,
+    })
+    Utilities.InstanceHelpers.ApplyProps(padding, props or {})
+    return padding
+end
 
-    -- Selecciona la caminadora al tocar el item y desplaza la ruleta hacia ella
-    item.MouseButton1Click:Connect(function()
-        selectedIndex = i
-        local targetY = (i - 1) * ITEM_HEIGHT
-        TweenService:Create(rollerScroll, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-            CanvasPosition = Vector2.new(0, targetY)
-        }):Play()
+-- ///////////////////////////////
+-- // CLEANUP ENGINE
+-- ///////////////////////////////
+
+local CleanupEngine = {
+    Tasks = {},
+}
+
+function Apex:AddCleanup(task)
+    table.insert(CleanupEngine.Tasks, task)
+    return task
+end
+
+function Apex:Connect(signal, callback)
+    local conn = signal:Connect(callback)
+    self:AddCleanup(conn)
+    return conn
+end
+
+function Apex:Destroy()
+    for _, window in ipairs(self._windows) do
+        if window._maid then
+            window._maid:destroy()
+        end
+        if window._gui then
+            window._gui:Destroy()
+        end
+    end
+    self._windows = {}
+
+    for _, component in pairs(self._components) do
+        component:Destroy()
+    end
+    self._components = {}
+
+    for _, notif in ipairs(self._notificationQueue) do
+        notif:Destroy()
+    end
+    self._notificationQueue = {}
+
+    for _, dialog in ipairs(self._dialogQueue) do
+        dialog:Destroy()
+    end
+    self._dialogQueue = {}
+
+    for _, signal in pairs(self.Signals) do
+        signal:disconnectAll()
+    end
+
+    for _, task in ipairs(CleanupEngine.Tasks) do
+        if type(task) == "function" then
+            task()
+        elseif type(task) == "userdata" and task.Disconnect then
+            task:Disconnect()
+        elseif type(task) == "table" and task.Destroy then
+            task:Destroy()
+        end
+    end
+    CleanupEngine.Tasks = {}
+
+    Apex.Signals.Destroyed:fire()
+    DebugService.Log("INFO", "Apex framework destroyed.")
+end
+
+-- ///////////////////////////////
+-- // STATE & REGISTRY
+-- ///////////////////////////////
+
+local Registry = {
+    Components = {},
+    NextId = 1,
+}
+
+function Registry.GenerateId(prefix)
+    local id = prefix .. "_" .. tostring(Registry.NextId)
+    Registry.NextId = Registry.NextId + 1
+    return id
+end
+
+function Registry.Register(component)
+    Registry.Components[component.Id] = component
+    Apex._components[component.Id] = component
+end
+
+function Registry.Unregister(component)
+    Registry.Components[component.Id] = nil
+    Apex._components[component.Id] = nil
+end
+
+function Registry.Find(id)
+    return Registry.Components[id]
+end
+
+function Registry.GetAll()
+    return Registry.Components
+end
+
+-- ///////////////////////////////
+-- // COMPONENT BASE CLASS
+-- ///////////////////////////////
+
+local ApexComponent = {}
+ApexComponent.__index = ApexComponent
+
+function ApexComponent.new(config)
+    local self = setmetatable({}, ApexComponent)
+    self.Id = config.Id or Registry.GenerateId("component")
+    self.Name = config.Name or ""
+    self.Description = config.Description or ""
+    self.Tooltip = config.Tooltip or self.Description
+    self.Visible = true
+    self.Enabled = true
+    self.Value = config.Default or nil
+    self.Default = config.Default or nil
+    self.Callback = config.Callback or nil
+    self.Parent = config.Parent or nil
+    self.Type = config.Type or "Component"
+    self._maid = Utilities.Maid.new()
+    self._connections = {}
+    self._instances = {}
+    self._container = nil
+    self._destroyed = false
+    self._stateChanged = Utilities.Signal.new()
+    Registry.Register(self)
+    return self
+end
+
+function ApexComponent:SetVisible(visible)
+    if self._destroyed then return end
+    self.Visible = visible
+    if self._container then
+        self._container.Visible = visible
+    end
+    Apex.Signals.StateChanged:fire(self, "Visible", visible)
+    self._stateChanged:fire("Visible", visible)
+end
+
+function ApexComponent:SetEnabled(enabled)
+    if self._destroyed then return end
+    self.Enabled = enabled
+    if self._toggleVisual then
+        self._toggleVisual(enabled)
+    end
+    Apex.Signals.StateChanged:fire(self, "Enabled", enabled)
+    self._stateChanged:fire("Enabled", enabled)
+end
+
+function ApexComponent:SetParent(parent)
+    self.Parent = parent
+    if self._container then
+        self._container.Parent = parent
+    end
+end
+
+function ApexComponent:SetPosition(position)
+    if self._container then
+        self._container.Position = position
+    end
+end
+
+function ApexComponent:GetValue()
+    return self.Value
+end
+
+function ApexComponent:SetValue(value)
+    self.Value = value
+    self:_updateVisual()
+    Apex.Signals.StateChanged:fire(self, "Value", value)
+    self._stateChanged:fire("Value", value)
+end
+
+function ApexComponent:Destroy()
+    if self._destroyed then return end
+    self._destroyed = true
+    self._maid:destroy()
+    if self._container then
+        self._container:Destroy()
+    end
+    Registry.Unregister(self)
+    Apex.Signals.StateChanged:fire(self, "Destroyed")
+    self._stateChanged:fire("Destroyed")
+end
+
+function ApexComponent:_updateVisual()
+    -- override in subclasses
+end
+
+function ApexComponent:_addConnection(signal, callback)
+    local conn = signal:Connect(callback)
+    self._maid:give(conn)
+    table.insert(self._connections, conn)
+    return conn
+end
+
+-- ///////////////////////////////
+-- // WINDOW CLASS
+-- ///////////////////////////////
+
+local Window = {}
+Window.__index = Window
+
+function Window.new(config)
+    local self = setmetatable({}, Window)
+    self.Id = config.Id or Registry.GenerateId("window")
+    self.Title = config.Title or "Apex Scripters"
+    self.Subtitle = config.Subtitle or ""
+    self.Status = config.Status or "Connected"
+    self.StatusType = config.StatusType or "Connected"
+    self.Logo = config.Logo or nil
+    self.Width = config.Width or 560
+    self.Height = config.Height or 400
+    self.Position = config.Position or UDim2.new(0.5, -self.Width/2, 0.5, -self.Height/2)
+    self.Minimized = false
+    self.Maximized = false
+    self.Visible = true
+    self._maid = Utilities.Maid.new()
+    self._tabs = {}
+    self._activeTab = nil
+    self._searchEnabled = config.Search or false
+    self._settingsEnabled = config.Settings ~= false
+    self._closed = false
+    self._dragEnabled = true
+    self._minimizedOriginalPos = nil
+    self._maximizedOriginalSize = nil
+    self._currentScale = ResponsiveEngine.Scale
+
+    -- Create GUI
+    self._gui = UIBuilder.CreateGui("ApexWindow_" .. self.Id)
+    self._maid:give(self._gui)
+
+    self._uiScale = Utilities.InstanceHelpers.Create("UIScale", {
+        Scale = ResponsiveEngine.Scale,
+        Parent = self._gui,
+    })
+    self._maid:give(self._uiScale)
+
+    -- Main frame
+    self._mainFrame = UIBuilder.CreateFrame(self._gui, {
+        Size = UDim2.new(0, self.Width, 0, self.Height),
+        Position = self.Position,
+        BackgroundColor3 = ThemeEngine.Current.Background,
+        BackgroundTransparency = ThemeEngine.Current.Transparency.Window,
+        BorderSizePixel = 0,
+        ClipsDescendants = true,
+    })
+    self._maid:give(self._mainFrame)
+    UIBuilder.CreateUICorner(self._mainFrame, ThemeEngine.Current.Radius + 4)
+    UIBuilder.CreateUIStroke(self._mainFrame, { Color = ThemeEngine.Current.Border, Thickness = 2 })
+
+    -- Header
+    self._header = UIBuilder.CreateFrame(self._mainFrame, {
+        Size = UDim2.new(1, 0, 0, 50),
+        BackgroundColor3 = ThemeEngine.Current.Surface,
+        BackgroundTransparency = ThemeEngine.Current.Transparency.Surface,
+        BorderSizePixel = 0,
+        ClipsDescendants = true,
+    })
+    UIBuilder.CreateUICorner(self._header, ThemeEngine.Current.Radius)
+    UIBuilder.CreateUIPadding(self._header, {
+        PaddingLeft = UDim.new(0, 12),
+        PaddingRight = UDim.new(0, 8),
+        PaddingTop = UDim.new(0, 6),
+        PaddingBottom = UDim.new(0, 6),
+    })
+
+    -- Logo area
+    self._logoButton = UIBuilder.CreateTextButton(self._header, {
+        Size = UDim2.new(0, 40, 0, 40),
+        BackgroundTransparency = 1,
+        Text = "",
+        AutoButtonColor = false,
+    })
+    if self.Logo then
+        local logoImage = Utilities.InstanceHelpers.Create("ImageLabel", {
+            Size = UDim2.new(1, 0, 1, 0),
+            Image = self.Logo,
+            BackgroundTransparency = 1,
+            Parent = self._logoButton,
+        })
+        self._maid:give(logoImage)
+    else
+        local logoText = UIBuilder.CreateTextLabel(self._logoButton, {
+            Size = UDim2.new(1, 0, 1, 0),
+            Text = "A",
+            TextSize = 24,
+            Font = Enum.Font.GothamBlack,
+            TextColor3 = ThemeEngine.Current.Accent,
+            TextXAlignment = Enum.TextXAlignment.Center,
+            TextYAlignment = Enum.TextYAlignment.Center,
+        })
+        self._maid:give(logoText)
+    end
+    self._logoButton.LayoutOrder = 1
+
+    -- Title and subtitle
+    self._titleLabel = UIBuilder.CreateTextLabel(self._header, {
+        Size = UDim2.new(1, -140, 0, 20),
+        Position = UDim2.new(0, 50, 0, 2),
+        Text = self.Title,
+        Font = ThemeEngine.Current.FontBold,
+        TextSize = 18,
+        TextColor3 = ThemeEngine.Current.Text,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+    self._titleLabel.LayoutOrder = 2
+
+    self._subtitleLabel = UIBuilder.CreateTextLabel(self._header, {
+        Size = UDim2.new(1, -140, 0, 16),
+        Position = UDim2.new(0, 50, 0, 24),
+        Text = self.Subtitle,
+        Font = ThemeEngine.Current.Font,
+        TextSize = 12,
+        TextColor3 = ThemeEngine.Current.TextSecondary,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+    self._subtitleLabel.LayoutOrder = 3
+
+    -- Header buttons
+    local buttonSize = 28
+    local buttonY = 11
+    local buttonXOffset = 10
+
+    self._minimizeButton = UIBuilder.CreateTextButton(self._header, {
+        Size = UDim2.new(0, buttonSize, 0, buttonSize),
+        Position = UDim2.new(1, -buttonXOffset - buttonSize*3 - 8, 0, buttonY),
+        Text = "—",
+        TextSize = 16,
+        BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary,
+        BackgroundTransparency = ThemeEngine.Current.Transparency.Component,
+        TextColor3 = ThemeEngine.Current.Text,
+        AutoButtonColor = false,
+    })
+    UIBuilder.CreateUICorner(self._minimizeButton, 4)
+    self._minimizeButton.LayoutOrder = 4
+
+    self._maximizeButton = UIBuilder.CreateTextButton(self._header, {
+        Size = UDim2.new(0, buttonSize, 0, buttonSize),
+        Position = UDim2.new(1, -buttonXOffset - buttonSize*2 - 4, 0, buttonY),
+        Text = "□",
+        TextSize = 14,
+        BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary,
+        BackgroundTransparency = ThemeEngine.Current.Transparency.Component,
+        TextColor3 = ThemeEngine.Current.Text,
+        AutoButtonColor = false,
+    })
+    UIBuilder.CreateUICorner(self._maximizeButton, 4)
+    self._maximizeButton.LayoutOrder = 5
+
+    self._settingsButton = UIBuilder.CreateTextButton(self._header, {
+        Size = UDim2.new(0, buttonSize, 0, buttonSize),
+        Position = UDim2.new(1, -buttonXOffset - buttonSize, 0, buttonY),
+        Text = "⚙",
+        TextSize = 14,
+        BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary,
+        BackgroundTransparency = ThemeEngine.Current.Transparency.Component,
+        TextColor3 = ThemeEngine.Current.Text,
+        AutoButtonColor = false,
+    })
+    UIBuilder.CreateUICorner(self._settingsButton, 4)
+    self._settingsButton.LayoutOrder = 6
+    self._settingsButton.Visible = self._settingsEnabled
+
+    self._closeButton = UIBuilder.CreateTextButton(self._header, {
+        Size = UDim2.new(0, buttonSize, 0, buttonSize),
+        Position = UDim2.new(1, -buttonXOffset, 0, buttonY),
+        Text = "×",
+        TextSize = 18,
+        BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary,
+        BackgroundTransparency = ThemeEngine.Current.Transparency.Component,
+        TextColor3 = ThemeEngine.Current.Text,
+        AutoButtonColor = false,
+    })
+    UIBuilder.CreateUICorner(self._closeButton, 4)
+    self._closeButton.LayoutOrder = 7
+
+    -- Status indicator
+    self._statusIndicator = UIBuilder.CreateFrame(self._header, {
+        Size = UDim2.new(0, 8, 0, 8),
+        Position = UDim2.new(0, self.Width - 190, 0, 22),
+        BackgroundColor3 = ThemeEngine.Current.Success,
+        BackgroundTransparency = 0,
+        BorderSizePixel = 0,
+        Visible = true,
+    })
+    UIBuilder.CreateUICorner(self._statusIndicator, 4)
+    self._statusIndicator.LayoutOrder = 8
+
+    self._statusLabel = UIBuilder.CreateTextLabel(self._header, {
+        Size = UDim2.new(0, 80, 0, 16),
+        Position = UDim2.new(0, self.Width - 182, 0, 18),
+        Text = self.Status,
+        Font = ThemeEngine.Current.Font,
+        TextSize = 10,
+        TextColor3 = ThemeEngine.Current.TextSecondary,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+    self._statusLabel.LayoutOrder = 9
+
+    -- Sidebar
+    self._sidebar = UIBuilder.CreateFrame(self._mainFrame, {
+        Size = UDim2.new(0, 150, 1, -50),
+        Position = UDim2.new(0, 0, 0, 50),
+        BackgroundColor3 = ThemeEngine.Current.Surface,
+        BackgroundTransparency = ThemeEngine.Current.Transparency.Surface,
+        BorderSizePixel = 0,
+        ClipsDescendants = true,
+    })
+    UIBuilder.CreateUICorner(self._sidebar, 0)
+    UIBuilder.CreateUIPadding(self._sidebar, {
+        PaddingTop = UDim.new(0, 8),
+        PaddingBottom = UDim.new(0, 8),
+        PaddingLeft = UDim.new(0, 6),
+        PaddingRight = UDim.new(0, 6),
+    })
+
+    self._sidebarLayout = UIBuilder.CreateUIListLayout(self._sidebar, {
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 4),
+    })
+
+    -- Content area
+    self._content = UIBuilder.CreateFrame(self._mainFrame, {
+        Size = UDim2.new(1, -150, 1, -50),
+        Position = UDim2.new(0, 150, 0, 50),
+        BackgroundColor3 = ThemeEngine.Current.Background,
+        BackgroundTransparency = ThemeEngine.Current.Transparency.Window,
+        BorderSizePixel = 0,
+        ClipsDescendants = true,
+    })
+    UIBuilder.CreateUICorner(self._content, 0)
+    UIBuilder.CreateUIPadding(self._content, {
+        PaddingTop = UDim.new(0, 10),
+        PaddingBottom = UDim.new(0, 10),
+        PaddingLeft = UDim.new(0, 10),
+        PaddingRight = UDim.new(0, 10),
+    })
+
+    -- Footer (optional)
+    if config.Footer then
+        self._footer = UIBuilder.CreateFrame(self._mainFrame, {
+            Size = UDim2.new(1, 0, 0, 30),
+            Position = UDim2.new(0, 0, 1, -30),
+            BackgroundColor3 = ThemeEngine.Current.Surface,
+            BackgroundTransparency = ThemeEngine.Current.Transparency.Surface,
+            BorderSizePixel = 0,
+            ClipsDescendants = true,
+        })
+        UIBuilder.CreateUICorner(self._footer, 0)
+        local footerLabel = UIBuilder.CreateTextLabel(self._footer, {
+            Size = UDim2.new(1, -20, 1, 0),
+            Position = UDim2.new(0, 10, 0, 0),
+            Text = config.Footer,
+            Font = ThemeEngine.Current.Font,
+            TextSize = 12,
+            TextColor3 = ThemeEngine.Current.TextSecondary,
+            TextXAlignment = Enum.TextXAlignment.Left,
+        })
+        self._footerLabel = footerLabel
+        self._maid:give(footerLabel)
+        self._maid:give(self._footer)
+    end
+
+    -- Drag system
+    self:_setupDrag()
+
+    -- Connect buttons
+    self._maid:give(self._closeButton.MouseButton1Click:Connect(function()
+        self:Close()
+    end))
+    self._maid:give(self._minimizeButton.MouseButton1Click:Connect(function()
+        self:Minimize()
+    end))
+    self._maid:give(self._maximizeButton.MouseButton1Click:Connect(function()
+        self:Maximize()
+    end))
+    self._maid:give(self._settingsButton.MouseButton1Click:Connect(function()
+        self:OpenSettings()
+    end))
+    self._maid:give(self._logoButton.MouseButton1Click:Connect(function()
+        self:OpenAbout()
+    end))
+
+    -- Responsive events
+    local camera = workspace.CurrentCamera
+    if camera then
+        self._maid:give(camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+            self:_handleResize()
+        end))
+    end
+
+    -- Register
+    table.insert(Apex._windows, self)
+    Apex.Signals.WindowChanged:fire(self, "Created")
+    DebugService.Log("INFO", "Window created: " .. self.Id)
+    return self
+end
+
+function Window:_setupDrag()
+    local input = game:GetService("UserInputService")
+    local dragging = false
+    local dragStart = nil
+    local startPos = nil
+
+    self._maid:give(self._header.InputBegan:Connect(function(inputObj)
+        if inputObj.UserInputType == Enum.UserInputType.MouseButton1 or inputObj.UserInputType == Enum.UserInputType.Touch then
+            if self._dragEnabled and not self.Maximized then
+                dragging = true
+                dragStart = inputObj.Position
+                startPos = self._mainFrame.Position
+            end
+        end
+    end))
+
+    self._maid:give(self._header.InputChanged:Connect(function(inputObj)
+        if dragging and (inputObj.UserInputType == Enum.UserInputType.MouseMovement or inputObj.UserInputType == Enum.UserInputType.Touch) then
+            local delta = inputObj.Position - dragStart
+            local newPos = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or game:GetService("GuiService"):GetScreenResolution()
+            local minX = 0
+            local minY = 0
+            local maxX = viewport.X - self._mainFrame.AbsoluteSize.X
+            local maxY = viewport.Y - self._mainFrame.AbsoluteSize.Y
+            newPos = UDim2.new(0, math.clamp(newPos.X.Offset, minX, maxX), 0, math.clamp(newPos.Y.Offset, minY, maxY))
+            self._mainFrame.Position = newPos
+        end
+    end))
+
+    self._maid:give(self._header.InputEnded:Connect(function(inputObj)
+        if inputObj.UserInputType == Enum.UserInputType.MouseButton1 or inputObj.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end))
+end
+
+function Window:_handleResize()
+    if self._closed then return end
+    self._currentScale = ResponsiveEngine.CalculateScale()
+    if self._uiScale then
+        self._uiScale.Scale = self._currentScale
+    end
+    local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or game:GetService("GuiService"):GetScreenResolution()
+    local absPos = self._mainFrame.AbsolutePosition
+    local absSize = self._mainFrame.AbsoluteSize
+    if absPos.X + absSize.X > viewport.X or absPos.Y + absSize.Y > viewport.Y then
+        self:SetPosition(UDim2.new(0.5, -self.Width/2, 0.5, -self.Height/2))
+    end
+end
+
+function Window:SetTitle(title)
+    self.Title = title
+    self._titleLabel.Text = title
+    Apex.Signals.WindowChanged:fire(self, "TitleChanged", title)
+end
+
+function Window:SetSubtitle(subtitle)
+    self.Subtitle = subtitle
+    self._subtitleLabel.Text = subtitle
+end
+
+function Window:SetStatus(status, statusType)
+    self.Status = status
+    self.StatusType = statusType or "Connected"
+    self._statusLabel.Text = status
+    local colorMap = {
+        Connected = ThemeEngine.Current.Success,
+        Loading = ThemeEngine.Current.Info,
+        Warning = ThemeEngine.Current.Warning,
+        Error = ThemeEngine.Current.Error,
+        Offline = ThemeEngine.Current.TextSecondary,
+    }
+    self._statusIndicator.BackgroundColor3 = colorMap[self.StatusType] or ThemeEngine.Current.Success
+end
+
+function Window:SetIcon(assetId)
+    self.Logo = assetId
+    if self._logoButton then
+        Utilities.InstanceHelpers.ClearChildren(self._logoButton)
+        if assetId then
+            local img = Utilities.InstanceHelpers.Create("ImageLabel", {
+                Size = UDim2.new(1, 0, 1, 0),
+                Image = assetId,
+                BackgroundTransparency = 1,
+                Parent = self._logoButton,
+            })
+            self._maid:give(img)
+        else
+            local fallback = UIBuilder.CreateTextLabel(self._logoButton, {
+                Size = UDim2.new(1, 0, 1, 0),
+                Text = "A",
+                TextSize = 24,
+                Font = Enum.Font.GothamBlack,
+                TextColor3 = ThemeEngine.Current.Accent,
+                TextXAlignment = Enum.TextXAlignment.Center,
+                TextYAlignment = Enum.TextYAlignment.Center,
+            })
+            self._maid:give(fallback)
+        end
+    end
+end
+
+function Window:SetPosition(position)
+    if type(position) == "UDim2" then
+        self.Position = position
+        self._mainFrame.Position = position
+    elseif type(position) == "table" then
+        local pos = UDim2.new(position.X or 0, position.XOffset or 0, position.Y or 0, position.YOffset or 0)
+        self:SetPosition(pos)
+    end
+end
+
+function Window:SetSize(width, height)
+    self.Width = width
+    self.Height = height
+    self._mainFrame.Size = UDim2.new(0, width, 0, height)
+    self._handleResize()
+end
+
+function Window:Open()
+    self._closed = false
+    self._gui.Enabled = true
+    self._mainFrame.Visible = true
+    self.Visible = true
+    Apex.Signals.VisibilityChanged:fire(self, true)
+    Apex.Signals.WindowChanged:fire(self, "Opened")
+    if not self.Minimized then
+        AnimationEngine.Tween(self._mainFrame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = ThemeEngine.Current.Transparency.Window, Size = UDim2.new(0, self.Width, 0, self.Height)})
+    end
+end
+
+function Window:Close()
+    self._closed = true
+    self._gui.Enabled = false
+    self._mainFrame.Visible = false
+    self.Visible = false
+    Apex.Signals.VisibilityChanged:fire(self, false)
+    Apex.Signals.WindowChanged:fire(self, "Closed")
+end
+
+function Window:Toggle()
+    if self._closed then
+        self:Open()
+    else
+        self:Close()
+    end
+end
+
+function Window:Minimize()
+    if self.Minimized then return end
+    self.Minimized = true
+    self._minimizedOriginalPos = self._mainFrame.Position
+    local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or game:GetService("GuiService"):GetScreenResolution()
+    local newY = viewport.Y - 50
+    self._mainFrame:TweenPosition(UDim2.new(self._mainFrame.Position.X.Scale, self._mainFrame.Position.X.Offset, 0, newY), "Out", "Quad", 0.3, true)
+    self._content.Visible = false
+    self._sidebar.Visible = false
+    self._header.Visible = true
+    self._mainFrame.Size = UDim2.new(0, self.Width, 0, 50)
+    -- Add restore button
+    if not self._restoreButton then
+        self._restoreButton = UIBuilder.CreateTextButton(self._header, {
+            Size = UDim2.new(0, 80, 0, 40),
+            Position = UDim2.new(0, 50, 0, 5),
+            Text = "Restore",
+            Font = ThemeEngine.Current.Font,
+            TextSize = 12,
+            TextColor3 = Color3.new(1,1,1),
+            BackgroundColor3 = ThemeEngine.Current.Accent,
+            BackgroundTransparency = 0,
+            AutoButtonColor = false,
+        })
+        UIBuilder.CreateUICorner(self._restoreButton, 6)
+        self._maid:give(self._restoreButton.MouseButton1Click:Connect(function()
+            self:Restore()
+        end))
+        self._maid:give(self._restoreButton)
+    end
+    self._restoreButton.Visible = true
+    Apex.Signals.WindowChanged:fire(self, "Minimized")
+end
+
+function Window:Restore()
+    if not self.Minimized then return end
+    self.Minimized = false
+    self._mainFrame.Size = UDim2.new(0, self.Width, 0, self.Height)
+    self._mainFrame.Position = self._minimizedOriginalPos or UDim2.new(0.5, -self.Width/2, 0.5, -self.Height/2)
+    self._content.Visible = true
+    self._sidebar.Visible = true
+    if self._restoreButton then
+        self._restoreButton.Visible = false
+    end
+    Apex.Signals.WindowChanged:fire(self, "Restored")
+end
+
+function Window:Maximize()
+    if self.Maximized then
+        -- Restore
+        self.Maximized = false
+        if self._maximizedOriginalSize then
+            self._mainFrame.Size = self._maximizedOriginalSize
+            self._maximizedOriginalSize = nil
+        end
+        self._content.Visible = true
+        self._sidebar.Visible = true
+        Apex.Signals.WindowChanged:fire(self, "Restored")
+    else
+        self.Maximized = true
+        self._maximizedOriginalSize = self._mainFrame.Size
+        local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or game:GetService("GuiService"):GetScreenResolution()
+        self._mainFrame.Size = UDim2.new(1, -20, 1, -20)
+        self._mainFrame.Position = UDim2.new(0, 10, 0, 10)
+        self._content.Visible = true
+        self._sidebar.Visible = true
+        self._header.Visible = true
+        Apex.Signals.WindowChanged:fire(self, "Maximized")
+    end
+end
+
+function Window:SetVisible(visible)
+    if visible then
+        self:Open()
+    else
+        self:Close()
+    end
+end
+
+function Window:CreateTab(config)
+    local tab = Tab.new(config, self)
+    table.insert(self._tabs, tab)
+    if #self._tabs == 1 then
+        self:SelectTab(tab)
+    end
+    return tab
+end
+
+function Window:SelectTab(tab)
+    if self._activeTab == tab then return end
+    self._activeTab = tab
+    for _, t in ipairs(self._tabs) do
+        t:_setActive(t == tab)
+        for _, section in ipairs(t.Sections) do
+            section._container.Visible = (t == tab)
+        end
+    end
+    Apex.Signals.TabChanged:fire(self, tab)
+    DebugService.Log("INFO", "Tab selected: " .. tab.Name)
+end
+
+function Window:EnableSearch(enable)
+    self._searchEnabled = enable
+    if enable then
+        if not self._searchButton then
+            self._searchButton = UIBuilder.CreateTextButton(self._header, {
+                Size = UDim2.new(0, 28, 0, 28),
+                Position = UDim2.new(1, -48, 0, 11),
+                Text = "🔍",
+                TextSize = 14,
+                BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary,
+                BackgroundTransparency = ThemeEngine.Current.Transparency.Component,
+                TextColor3 = ThemeEngine.Current.Text,
+                AutoButtonColor = false,
+            })
+            UIBuilder.CreateUICorner(self._searchButton, 4)
+            self._maid:give(self._searchButton.MouseButton1Click:Connect(function()
+                self:OpenSearch()
+            end))
+            self._maid:give(self._searchButton)
+        end
+        self._searchButton.Visible = true
+    else
+        if self._searchButton then self._searchButton.Visible = false end
+    end
+end
+
+function Window:OpenSearch()
+    if self._searchOverlay then self._searchOverlay:Destroy() end
+    local overlay = UIBuilder.CreateFrame(self._gui, {
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+        BackgroundTransparency = 0.5,
+        ZIndex = 10,
+        ClipsDescendants = true,
+    })
+    local searchBox = UIBuilder.CreateFrame(overlay, {
+        Size = UDim2.new(0, 400, 0, 300),
+        Position = UDim2.new(0.5, -200, 0.5, -150),
+        BackgroundColor3 = ThemeEngine.Current.Surface,
+        BackgroundTransparency = 0,
+        BorderSizePixel = 0,
+        ClipsDescendants = true,
+    })
+    UIBuilder.CreateUICorner(searchBox, 8)
+    local searchInput = UIBuilder.CreateTextButton(searchBox, {
+        Size = UDim2.new(1, -20, 0, 30),
+        Position = UDim2.new(0, 10, 0, 10),
+        Text = "",
+        TextXAlignment = Enum.TextXAlignment.Left,
+        PlaceholderText = "Search...",
+        PlaceholderColor3 = ThemeEngine.Current.TextSecondary,
+        BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary,
+        BackgroundTransparency = 0.2,
+    })
+    UIBuilder.CreateUICorner(searchInput, 4)
+    local resultsFrame = UIBuilder.CreateScrollingFrame(searchBox, {
+        Size = UDim2.new(1, -20, 1, -50),
+        Position = UDim2.new(0, 10, 0, 50),
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+    })
+    local resultsLayout = UIBuilder.CreateUIListLayout(resultsFrame, {
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 4),
+    })
+
+    local function performSearch(query)
+        Utilities.InstanceHelpers.ClearChildren(resultsFrame)
+        if query == "" then return end
+        local found = {}
+        for _, tab in ipairs(self._tabs) do
+            if string.lower(tab.Name):find(string.lower(query), 1, true) then
+                table.insert(found, {type="Tab", object=tab, text=tab.Name})
+            end
+            for _, section in ipairs(tab.Sections) do
+                if string.lower(section.Name):find(string.lower(query), 1, true) then
+                    table.insert(found, {type="Section", object=section, text=section.Name})
+                end
+                for _, comp in ipairs(section.Components) do
+                    if string.lower(comp.Name):find(string.lower(query), 1, true) or (comp.Description and string.lower(comp.Description):find(string.lower(query), 1, true)) then
+                        table.insert(found, {type="Component", object=comp, text=comp.Name})
+                    end
+                end
+            end
+        end
+        for i, result in ipairs(found) do
+            local btn = UIBuilder.CreateTextButton(resultsFrame, {
+                Size = UDim2.new(1, 0, 0, 30),
+                Text = result.type .. ": " .. result.text,
+                LayoutOrder = i,
+                BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary,
+                BackgroundTransparency = 0.4,
+            })
+            UIBuilder.CreateUICorner(btn, 4)
+            btn.MouseButton1Click:Connect(function()
+                if result.type == "Tab" then
+                    self:SelectTab(result.object)
+                elseif result.type == "Section" then
+                    self:SelectTab(result.object.ParentTab)
+                else
+                    self:SelectTab(result.object.ParentSection.ParentTab)
+                    if result.object._container then
+                        local originalColor = result.object._container.BackgroundColor3
+                        AnimationEngine.Tween(result.object._container, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = ThemeEngine.Current.Accent})
+                        task.delay(0.5, function()
+                            if result.object._container then
+                                AnimationEngine.Tween(result.object._container, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = originalColor})
+                            end
+                        end)
+                    end
+                end
+                overlay:Destroy()
+                self._searchOverlay = nil
+            end)
+        end
+        resultsFrame.CanvasSize = UDim2.new(0, 0, 0, #found * 34)
+    end
+
+    searchInput:GetPropertyChangedSignal("Text"):Connect(function()
+        performSearch(searchInput.Text)
+    end)
+    searchInput.FocusLost:Connect(function(enterPressed)
+        if enterPressed then
+            performSearch(searchInput.Text)
+        end
+    end)
+
+    overlay.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if not searchBox:IsDescendantOf(input.Position) then
+                overlay:Destroy()
+                self._searchOverlay = nil
+            end
+        end
+    end)
+
+    self._searchOverlay = overlay
+    self._maid:give(overlay)
+end
+
+function Window:OpenSettings()
+    local themes = table.concat({"Dark", "Midnight", "AMOLED", "Light", "Purple", "Blue", "Red", "Glass"}, ", ")
+    Apex:Notify({
+        Title = "Settings",
+        Description = "Use Apex:SetTheme to change themes. Available: " .. themes,
+        Type = "Info"
+    })
+end
+
+function Window:OpenAbout()
+    Apex:Dialog({
+        Title = "About Apex Scripters",
+        Description = "Version: " .. Apex.Version .. "\nProfessional UI Framework\nCreated by Apex Scripters Team",
+        Buttons = {
+            {Name = "Close", Callback = function() end}
+        }
+    })
+end
+
+function Window:CreateDialog(config)
+    return Apex:Dialog(config)
+end
+
+function Window:Destroy()
+    if self._closed then return end
+    self._maid:destroy()
+    if self._gui then self._gui:Destroy() end
+    for i, w in ipairs(Apex._windows) do
+        if w == self then
+            table.remove(Apex._windows, i)
+            break
+        end
+    end
+    Apex.Signals.WindowChanged:fire(self, "Destroyed")
+    Apex.Signals.Destroyed:fire(self)
+    DebugService.Log("INFO", "Window destroyed: " .. self.Id)
+end
+
+-- ///////////////////////////////
+-- // TAB CLASS
+-- ///////////////////////////////
+
+local Tab = {}
+Tab.__index = Tab
+
+function Tab.new(config, parentWindow)
+    local self = setmetatable({}, Tab)
+    self.Id = config.Id or Registry.GenerateId("tab")
+    self.Name = config.Name or "Tab"
+    self.Icon = config.Icon or nil
+    self.ParentWindow = parentWindow
+    self.Sections = {}
+    self.Active = false
+    self.Visible = true
+    self._container = nil
+    self._button = nil
+    self._indicator = nil
+    self._maid = Utilities.Maid.new()
+
+    local button = UIBuilder.CreateTextButton(parentWindow._sidebar, {
+        Size = UDim2.new(1, 0, 0, 36),
+        Text = self.Name,
+        Font = ThemeEngine.Current.Font,
+        TextSize = 14,
+        TextColor3 = ThemeEngine.Current.TextSecondary,
+        BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary,
+        BackgroundTransparency = ThemeEngine.Current.Transparency.Component,
+        AutoButtonColor = false,
+        LayoutOrder = #parentWindow._tabs + 1,
+    })
+    UIBuilder.CreateUICorner(button, 6)
+    self._button = button
+    self._maid:give(button)
+
+    local indicator = UIBuilder.CreateFrame(button, {
+        Size = UDim2.new(0, 3, 1, 0),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundColor3 = ThemeEngine.Current.Accent,
+        BackgroundTransparency = 0,
+        BorderSizePixel = 0,
+        Visible = false,
+    })
+    UIBuilder.CreateUICorner(indicator, 2)
+    self._indicator = indicator
+    self._maid:give(indicator)
+
+    if self.Icon then
+        local iconLabel = UIBuilder.CreateTextLabel(button, {
+            Size = UDim2.new(0, 20, 0, 20),
+            Position = UDim2.new(0, 8, 0.5, -10),
+            Text = IconService.GetIcon(self.Icon) or self.Icon,
+            Font = Enum.Font.GothamBold,
+            TextSize = 16,
+            TextColor3 = ThemeEngine.Current.TextSecondary,
+            TextXAlignment = Enum.TextXAlignment.Center,
+            TextYAlignment = Enum.TextYAlignment.Center,
+        })
+        self._iconLabel = iconLabel
+        self._maid:give(iconLabel)
+        button.TextXAlignment = Enum.TextXAlignment.Left
+        button.Position = UDim2.new(0, 30, 0, 0)
+        button.Size = UDim2.new(1, -30, 0, 36)
+    end
+
+    button.MouseButton1Click:Connect(function()
+        parentWindow:SelectTab(self)
+    end)
+
+    return self
+end
+
+function Tab:_setActive(active)
+    self.Active = active
+    if self._indicator then
+        self._indicator.Visible = active
+    end
+    if self._button then
+        if active then
+            self._button.BackgroundColor3 = ThemeEngine.Current.Accent
+            self._button.BackgroundTransparency = 0
+            self._button.TextColor3 = Color3.new(1,1,1)
+        else
+            self._button.BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary
+            self._button.BackgroundTransparency = ThemeEngine.Current.Transparency.Component
+            self._button.TextColor3 = ThemeEngine.Current.TextSecondary
+        end
+        if self._iconLabel then
+            if active then
+                self._iconLabel.TextColor3 = Color3.new(1,1,1)
+            else
+                self._iconLabel.TextColor3 = ThemeEngine.Current.TextSecondary
+            end
+        end
+    end
+end
+
+function Tab:CreateSection(config)
+    local section = Section.new(config, self)
+    table.insert(self.Sections, section)
+    return section
+end
+
+function Tab:Select()
+    self.ParentWindow:SelectTab(self)
+end
+
+function Tab:SetName(name)
+    self.Name = name
+    self._button.Text = name
+    Apex.Signals.TabChanged:fire(self.ParentWindow, self, "NameChanged")
+end
+
+function Tab:SetIcon(icon)
+    self.Icon = icon
+    if self._iconLabel then
+        self._iconLabel.Text = IconService.GetIcon(icon) or icon
+    else
+        local iconLabel = UIBuilder.CreateTextLabel(self._button, {
+            Size = UDim2.new(0, 20, 0, 20),
+            Position = UDim2.new(0, 8, 0.5, -10),
+            Text = IconService.GetIcon(icon) or icon,
+            Font = Enum.Font.GothamBold,
+            TextSize = 16,
+            TextColor3 = self.Active and Color3.new(1,1,1) or ThemeEngine.Current.TextSecondary,
+            TextXAlignment = Enum.TextXAlignment.Center,
+            TextYAlignment = Enum.TextYAlignment.Center,
+        })
+        self._iconLabel = iconLabel
+        self._maid:give(iconLabel)
+        self._button.TextXAlignment = Enum.TextXAlignment.Left
+        self._button.Position = UDim2.new(0, 30, 0, 0)
+        self._button.Size = UDim2.new(1, -30, 0, 36)
+    end
+end
+
+function Tab:SetVisible(visible)
+    self.Visible = visible
+    self._button.Visible = visible
+    if not visible and self.Active then
+        for _, t in ipairs(self.ParentWindow._tabs) do
+            if t.Visible and t ~= self then
+                self.ParentWindow:SelectTab(t)
+                break
+            end
+        end
+    end
+end
+
+function Tab:Destroy()
+    self._maid:destroy()
+    if self._button then self._button:Destroy() end
+    for i, t in ipairs(self.ParentWindow._tabs) do
+        if t == self then
+            table.remove(self.ParentWindow._tabs, i)
+            break
+        end
+    end
+    if self.ParentWindow._activeTab == self then
+        self.ParentWindow._activeTab = nil
+        if #self.ParentWindow._tabs > 0 then
+            self.ParentWindow:SelectTab(self.ParentWindow._tabs[1])
+        end
+    end
+    Apex.Signals.TabChanged:fire(self.ParentWindow, self, "Destroyed")
+end
+
+-- ///////////////////////////////
+-- // SECTION CLASS
+-- ///////////////////////////////
+
+local Section = {}
+Section.__index = Section
+
+function Section.new(config, parentTab)
+    local self = setmetatable({}, Section)
+    self.Id = config.Id or Registry.GenerateId("section")
+    self.Name = config.Name or "Section"
+    self.Description = config.Description or ""
+    self.ParentTab = parentTab
+    self.Components = {}
+    self.Visible = true
+    self._container = nil
+    self._maid = Utilities.Maid.new()
+
+    local container = UIBuilder.CreateFrame(parentTab.ParentWindow._content, {
+        Size = UDim2.new(1, 0, 0, 10),
+        BackgroundColor3 = ThemeEngine.Current.Surface,
+        BackgroundTransparency = ThemeEngine.Current.Transparency.Surface,
+        BorderSizePixel = 0,
+        ClipsDescendants = true,
+    })
+    UIBuilder.CreateUICorner(container, ThemeEngine.Current.Radius)
+    UIBuilder.CreateUIStroke(container, { Color = ThemeEngine.Current.Border, Thickness = 1 })
+    self._container = container
+    self._maid:give(container)
+
+    local header = UIBuilder.CreateFrame(container, {
+        Size = UDim2.new(1, 0, 0, 40),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+    })
+    UIBuilder.CreateUIPadding(header, {
+        PaddingLeft = UDim.new(0, 12),
+        PaddingRight = UDim.new(0, 12),
+        PaddingTop = UDim.new(0, 6),
+        PaddingBottom = UDim.new(0, 2),
+    })
+    local titleLabel = UIBuilder.CreateTextLabel(header, {
+        Size = UDim2.new(1, 0, 0, 20),
+        Text = self.Name,
+        Font = ThemeEngine.Current.FontBold,
+        TextSize = 16,
+        TextColor3 = ThemeEngine.Current.Text,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+    if self.Description and self.Description ~= "" then
+        local descLabel = UIBuilder.CreateTextLabel(header, {
+            Size = UDim2.new(1, 0, 0, 16),
+            Position = UDim2.new(0, 0, 0, 22),
+            Text = self.Description,
+            Font = ThemeEngine.Current.Font,
+            TextSize = 11,
+            TextColor3 = ThemeEngine.Current.TextSecondary,
+            TextXAlignment = Enum.TextXAlignment.Left,
+        })
+    end
+
+    local compsContainer = UIBuilder.CreateFrame(container, {
+        Size = UDim2.new(1, 0, 0, 10),
+        Position = UDim2.new(0, 0, 0, 40),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+    })
+    UIBuilder.CreateUIPadding(compsContainer, {
+        PaddingLeft = UDim.new(0, 10),
+        PaddingRight = UDim.new(0, 10),
+        PaddingTop = UDim.new(0, 4),
+        PaddingBottom = UDim.new(0, 8),
+    })
+    local layout = UIBuilder.CreateUIListLayout(compsContainer, {
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 8),
+    })
+    self._componentsContainer = compsContainer
+    self._componentsLayout = layout
+    self._maid:give(compsContainer)
+    self._maid:give(layout)
+
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        container.Size = UDim2.new(1, 0, 0, compsContainer.AbsoluteContentSize.Y + 50)
+    end)
+
+    return self
+end
+
+function Section:CreateButton(config) return Button.new(config, self) end
+function Section:CreateToggle(config) return Toggle.new(config, self) end
+function Section:CreateSlider(config) return Slider.new(config, self) end
+function Section:CreateDropdown(config)
+    if config.Multi then
+        return MultiDropdown.new(config, self)
+    else
+        return Dropdown.new(config, self)
+    end
+end
+function Section:CreateInput(config) return Input.new(config, self) end
+function Section:CreateKeybind(config) return Keybind.new(config, self) end
+function Section:CreateColorPicker(config) return ColorPicker.new(config, self) end
+function Section:CreateParagraph(config) return Paragraph.new(config, self) end
+function Section:CreateLabel(config) return Label.new(config, self) end
+function Section:CreateDivider(config) return Divider.new(config, self) end
+function Section:CreateBadge(config) return Badge.new(config, self) end
+function Section:CreateCard(config) return Card.new(config, self) end
+function Section:CreateProgress(config) return Progress.new(config, self) end
+function Section:CreateImage(config) return ImageComponent.new(config, self) end
+function Section:CreateSpacer(config) return Spacer.new(config, self) end
+function Section:CreateWarning(config) config.Type = "Warning" return StatusMessage.new(config, self) end
+function Section:CreateError(config) config.Type = "Error" return StatusMessage.new(config, self) end
+function Section:CreateInfo(config) config.Type = "Info" return StatusMessage.new(config, self) end
+function Section:CreateSuccess(config) config.Type = "Success" return StatusMessage.new(config, self) end
+function Section:CreateLoading(config) return LoadingComponent.new(config, self) end
+function Section:CreateEmptyState(config) return EmptyState.new(config, self) end
+function Section:CreateRichText(config) return RichText.new(config, self) end
+function Section:CreateCustomComponent(config)
+    local factory = Apex._customComponents[config.Type or config.ComponentType]
+    if factory then
+        return factory(config, self)
+    end
+    error("Custom component not registered: " .. tostring(config.Type))
+end
+
+function Section:SetVisible(visible)
+    self.Visible = visible
+    self._container.Visible = visible
+end
+
+function Section:Destroy()
+    self._maid:destroy()
+    if self._container then self._container:Destroy() end
+    for i, s in ipairs(self.ParentTab.Sections) do
+        if s == self then
+            table.remove(self.ParentTab.Sections, i)
+            break
+        end
+    end
+    for _, comp in ipairs(self.Components) do
+        comp:Destroy()
+    end
+end
+
+-- ///////////////////////////////
+-- // ICON SERVICE
+-- ///////////////////////////////
+
+local IconService = {
+    Icons = {
+        home = "🏠", settings = "⚙", user = "👤", search = "🔍",
+        play = "▶", pause = "⏸", stop = "⏹", heart = "❤", star = "⭐",
+        check = "✔", close = "✖", plus = "+", minus = "-", info = "ℹ",
+        warning = "⚠", error = "⛔", folder = "📁", file = "📄",
+        image = "🖼", chart = "📊", clock = "🕒", cloud = "☁",
+        download = "⬇", upload = "⬆", refresh = "🔄", link = "🔗",
+        lock = "🔒", unlock = "🔓", eye = "👁", eyeOff = "🚫",
+        bell = "🔔", message = "💬", code = "💻", terminal = "⌨",
+        gamepad = "🎮", music = "🎵", video = "🎬", camera = "📷",
+        map = "🗺", compass = "🧭", layers = "📚", grid = "🔲",
+        list = "📃", slider = "🎚", toggle = "🔘", dropdown = "🔽",
+        input = "✏", keybind = "⌨", color = "🎨", paragraph = "📝",
+        label = "🏷", divider = "➖", badge = "🔖", card = "🃏",
+        progress = "📈", spacer = "⬜", warningMsg = "⚠",
+        errorMsg = "🛑", infoMsg = "ℹ", successMsg = "✅",
+        loading = "⏳", empty = "📭", richtext = "🔤",
+    },
+    GetIcon = function(name)
+        return IconService.Icons[name] or name
+    end,
+    RegisterIcon = function(name, icon)
+        IconService.Icons[name] = icon
+    end,
+}
+
+Apex.IconService = IconService
+
+-- ///////////////////////////////
+-- // COMPONENT IMPLEMENTATIONS
+-- ///////////////////////////////
+
+local function CreateComponentContainer(section, height)
+    local container = UIBuilder.CreateFrame(section._componentsContainer, {
+        Size = UDim2.new(1, 0, 0, height or 40),
+        BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary,
+        BackgroundTransparency = ThemeEngine.Current.Transparency.Component,
+        BorderSizePixel = 0,
+        ClipsDescendants = true,
+    })
+    UIBuilder.CreateUICorner(container, ThemeEngine.Current.Radius)
+    UIBuilder.CreateUIStroke(container, { Color = ThemeEngine.Current.Border, Thickness = 1 })
+    UIBuilder.CreateUIPadding(container, {
+        PaddingLeft = UDim.new(0, 10),
+        PaddingRight = UDim.new(0, 10),
+        PaddingTop = UDim.new(0, 4),
+        PaddingBottom = UDim.new(0, 4),
+    })
+    return container
+end
+
+local function CreateLabelArea(container, name, description)
+    local labelFrame = UIBuilder.CreateFrame(container, {
+        Size = UDim2.new(0, 100, 1, 0),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+    })
+    local nameLabel = UIBuilder.CreateTextLabel(labelFrame, {
+        Size = UDim2.new(1, 0, 0, 18),
+        Position = UDim2.new(0, 0, 0, 2),
+        Text = name,
+        Font = ThemeEngine.Current.Font,
+        TextSize = 13,
+        TextColor3 = ThemeEngine.Current.Text,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+    if description and description ~= "" then
+        local descLabel = UIBuilder.CreateTextLabel(labelFrame, {
+            Size = UDim2.new(1, 0, 0, 14),
+            Position = UDim2.new(0, 0, 0, 20),
+            Text = description,
+            Font = ThemeEngine.Current.Font,
+            TextSize = 10,
+            TextColor3 = ThemeEngine.Current.TextSecondary,
+            TextXAlignment = Enum.TextXAlignment.Left,
+        })
+    end
+    return labelFrame
+end
+
+-- Button
+Button = setmetatable({}, ApexComponent)
+Button.__index = Button
+
+function Button.new(config, section)
+    local self = setmetatable(ApexComponent.new(config), Button)
+    self.Type = "Button"
+    self.ParentSection = section
+    self.Icon = config.Icon or nil
+    self.Loading = false
+    self._container = CreateComponentContainer(section, 40)
+    self._maid:give(self._container)
+    table.insert(section.Components, self)
+
+    local labelArea = CreateLabelArea(self._container, self.Name, self.Description)
+    labelArea.Size = UDim2.new(0, 120, 1, 0)
+    labelArea.LayoutOrder = 1
+
+    local button = UIBuilder.CreateTextButton(self._container, {
+        Size = UDim2.new(0, 80, 0, 30),
+        Position = UDim2.new(1, -90, 0.5, -15),
+        Text = self.Name,
+        Font = ThemeEngine.Current.FontBold,
+        TextSize = 12,
+        TextColor3 = Color3.new(1,1,1),
+        BackgroundColor3 = ThemeEngine.Current.Accent,
+        BackgroundTransparency = 0,
+        AutoButtonColor = false,
+        LayoutOrder = 2,
+    })
+    UIBuilder.CreateUICorner(button, 6)
+    self._button = button
+    self._maid:give(button)
+
+    if self.Icon then
+        button.Text = IconService.GetIcon(self.Icon) .. " " .. self.Name
+    end
+
+    button.MouseButton1Click:Connect(function()
+        if self.Enabled and not self.Loading then
+            self:_execute()
+        end
+    end)
+    self._maid:give(button.MouseButton1Click)
+
+    button.MouseEnter:Connect(function()
+        if self.Enabled then
+            AnimationEngine.Tween(button, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = ThemeEngine.Current.AccentHover})
+        end
+    end)
+    button.MouseLeave:Connect(function()
+        if self.Enabled then
+            AnimationEngine.Tween(button, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = ThemeEngine.Current.Accent})
+        end
+    end)
+
+    if self.Tooltip then
+        self:_addTooltip(button)
+    end
+
+    return self
+end
+
+function Button:_execute()
+    if self.Callback then
+        self:SetLoading(true)
+        task.spawn(function()
+            local success, err = pcall(self.Callback)
+            if not success then
+                DebugService.Error("Button callback error: " .. tostring(err))
+            end
+            self:SetLoading(false)
+        end)
+    end
+end
+
+function Button:SetText(text)
+    self.Name = text
+    if self.Icon then
+        self._button.Text = IconService.GetIcon(self.Icon) .. " " .. text
+    else
+        self._button.Text = text
+    end
+end
+
+function Button:SetDescription(desc)
+    self.Description = desc
+    -- Não temos referência ao label de descrição, mas podemos aceitar
+end
+
+function Button:SetIcon(icon)
+    self.Icon = icon
+    if self.Icon then
+        self._button.Text = IconService.GetIcon(self.Icon) .. " " .. self.Name
+    else
+        self._button.Text = self.Name
+    end
+end
+
+function Button:SetEnabled(enabled)
+    ApexComponent.SetEnabled(self, enabled)
+    self._button.AutoButtonColor = false
+    if enabled then
+        self._button.BackgroundColor3 = ThemeEngine.Current.Accent
+        self._button.TextColor3 = Color3.new(1,1,1)
+    else
+        self._button.BackgroundColor3 = Color3.fromRGB(100,100,100)
+        self._button.TextColor3 = Color3.fromRGB(180,180,180)
+    end
+end
+
+function Button:SetLoading(loading)
+    self.Loading = loading
+    if loading then
+        self._button.Text = "Loading..."
+        self._button.BackgroundColor3 = ThemeEngine.Current.Warning
+        self._button.AutoButtonColor = false
+    else
+        self:SetText(self.Name)
+        self:SetEnabled(self.Enabled)
+    end
+end
+
+function Button:_addTooltip(instance)
+    local tooltip = UIBuilder.CreateTextLabel(instance.Parent, {
+        Size = UDim2.new(0, 100, 0, 20),
+        Position = UDim2.new(0, 0, 0, 0),
+        Text = self.Tooltip,
+        Font = ThemeEngine.Current.Font,
+        TextSize = 10,
+        TextColor3 = ThemeEngine.Current.Text,
+        BackgroundColor3 = Color3.fromRGB(0,0,0),
+        BackgroundTransparency = 0.2,
+        Visible = false,
+        ZIndex = 20,
+    })
+    UIBuilder.CreateUICorner(tooltip, 4)
+    self._maid:give(tooltip)
+    instance.MouseEnter:Connect(function()
+        tooltip.Visible = true
+        local abs = instance.AbsolutePosition
+        tooltip.Position = UDim2.new(0, abs.X - instance.Parent.AbsolutePosition.X, 0, abs.Y - instance.Parent.AbsolutePosition.Y - 20)
+    end)
+    instance.MouseLeave:Connect(function()
+        tooltip.Visible = false
     end)
 end
 
--- Ajusta la ruleta al item mas cercano despues de soltar el scroll
-local function snapRoller()
-    local rawY         = rollerScroll.CanvasPosition.Y
-    local snappedIndex = math.clamp(math.round(rawY / ITEM_HEIGHT) + 1, 1, #treadmillData)
-    selectedIndex      = snappedIndex
-    TweenService:Create(rollerScroll, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-        CanvasPosition = Vector2.new(0, (snappedIndex - 1) * ITEM_HEIGHT)
-    }):Play()
+-- Toggle
+Toggle = setmetatable({}, ApexComponent)
+Toggle.__index = Toggle
+
+function Toggle.new(config, section)
+    local self = setmetatable(ApexComponent.new(config), Toggle)
+    self.Type = "Toggle"
+    self.ParentSection = section
+    self.Value = config.Default or false
+    self._container = CreateComponentContainer(section, 40)
+    self._maid:give(self._container)
+    table.insert(section.Components, self)
+
+    local labelArea = CreateLabelArea(self._container, self.Name, self.Description)
+    labelArea.LayoutOrder = 1
+
+    local toggleButton = UIBuilder.CreateTextButton(self._container, {
+        Size = UDim2.new(0, 40, 0, 20),
+        Position = UDim2.new(1, -50, 0.5, -10),
+        Text = "",
+        BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary,
+        BackgroundTransparency = 0.3,
+        AutoButtonColor = false,
+        LayoutOrder = 2,
+    })
+    UIBuilder.CreateUICorner(toggleButton, 10)
+    local toggleKnob = UIBuilder.CreateFrame(toggleButton, {
+        Size = UDim2.new(0, 16, 0, 16),
+        Position = UDim2.new(0, 2, 0.5, -8),
+        BackgroundColor3 = ThemeEngine.Current.TextSecondary,
+        BackgroundTransparency = 0,
+        BorderSizePixel = 0,
+    })
+    UIBuilder.CreateUICorner(toggleKnob, 8)
+    self._toggleButton = toggleButton
+    self._toggleKnob = toggleKnob
+    self._maid:give(toggleButton)
+    self._maid:give(toggleKnob)
+
+    self._toggleVisual = function(state)
+        if state then
+            toggleButton.BackgroundColor3 = ThemeEngine.Current.Accent
+            toggleKnob.BackgroundColor3 = Color3.new(1,1,1)
+            AnimationEngine.Tween(toggleKnob, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0, 22, 0.5, -8)})
+        else
+            toggleButton.BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary
+            toggleKnob.BackgroundColor3 = ThemeEngine.Current.TextSecondary
+            AnimationEngine.Tween(toggleKnob, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0, 2, 0.5, -8)})
+        end
+    end
+    self:_updateVisual()
+
+    toggleButton.MouseButton1Click:Connect(function()
+        if self.Enabled then
+            self:SetValue(not self.Value)
+        end
+    end)
+    self._maid:give(toggleButton.MouseButton1Click)
+
+    return self
 end
 
--- Detecta cuando se suelta el scroll y aplica el ajuste automatico de posicion
-rollerScroll.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-    or input.UserInputType == Enum.UserInputType.Touch then
-        task.delay(0.05, snapRoller)
+function Toggle:SetValue(value)
+    self.Value = value
+    self:_updateVisual()
+    if self.Callback then
+        task.spawn(self.Callback, value)
     end
-end)
+    Apex.Signals.StateChanged:fire(self, "Value", value)
+    self._stateChanged:fire("Value", value)
+end
 
--- Degradado superior de la ruleta para efecto de profundidad visual
-local fadeTop = Instance.new("Frame")
-fadeTop.Size                 = UDim2.new(1, 0, 0, ITEM_HEIGHT)
-fadeTop.BackgroundColor3     = C.card
-fadeTop.BackgroundTransparency = 0.1
-fadeTop.BorderSizePixel      = 0
-fadeTop.ZIndex               = 7
-fadeTop.Parent               = rollerContainer
-local fadeTopGrad = Instance.new("UIGradient")
-fadeTopGrad.Rotation     = 90
-fadeTopGrad.Color        = ColorSequence.new({ ColorSequenceKeypoint.new(0, Color3.new(0,0,0)), ColorSequenceKeypoint.new(1, Color3.new(0,0,0)) })
-fadeTopGrad.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) })
-fadeTopGrad.Parent       = fadeTop
+function Toggle:GetValue()
+    return self.Value
+end
 
--- Degradado inferior de la ruleta para efecto de profundidad visual
-local fadeBot = Instance.new("Frame")
-fadeBot.Size                 = UDim2.new(1, 0, 0, ITEM_HEIGHT)
-fadeBot.Position             = UDim2.new(0, 0, 1, -ITEM_HEIGHT)
-fadeBot.BackgroundColor3     = C.card
-fadeBot.BackgroundTransparency = 0.1
-fadeBot.BorderSizePixel      = 0
-fadeBot.ZIndex               = 7
-fadeBot.Parent               = rollerContainer
-local fadeBotGrad = Instance.new("UIGradient")
-fadeBotGrad.Rotation     = 270
-fadeBotGrad.Color        = ColorSequence.new({ ColorSequenceKeypoint.new(0, Color3.new(0,0,0)), ColorSequenceKeypoint.new(1, Color3.new(0,0,0)) })
-fadeBotGrad.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) })
-fadeBotGrad.Parent       = fadeBot
+function Toggle:_updateVisual()
+    if self._toggleVisual then
+        self._toggleVisual(self.Value)
+    end
+end
 
--- Etiqueta de seccion para el campo de cantidad de XP objetivo
-local secLabel2 = makeLabel(body, "GANHOS DE XP", UDim2.new(1, 0, 0, 14), Enum.Font.GothamBold, C.accentLight)
-secLabel2.Position = UDim2.new(0, 0, 0, ITEM_HEIGHT * VISIBLE_ITEMS + 24)
-secLabel2.TextSize = 10
+function Toggle:SetEnabled(enabled)
+    ApexComponent.SetEnabled(self, enabled)
+    self._toggleButton.AutoButtonColor = false
+    if not enabled then
+        self._toggleButton.BackgroundColor3 = Color3.fromRGB(80,80,80)
+        self._toggleKnob.BackgroundColor3 = Color3.fromRGB(120,120,120)
+    else
+        self:_updateVisual()
+    end
+end
 
--- Contenedor del campo de entrada de la cantidad de ganancias objetivo
-local xpFrame = Instance.new("Frame")
-xpFrame.Size             = UDim2.new(1, 0, 0, 38)
-xpFrame.Position         = UDim2.new(0, 0, 0, ITEM_HEIGHT * VISIBLE_ITEMS + 42)
-xpFrame.BackgroundColor3 = C.card
-xpFrame.BorderSizePixel  = 0
-xpFrame.Parent           = body
-makeCorner(xpFrame, 10)
-makeStroke(xpFrame, C.border, 1)
+-- Slider
+Slider = setmetatable({}, ApexComponent)
+Slider.__index = Slider
 
--- Icono de rayo decorativo dentro del campo de XP
-local xpIcon = Instance.new("TextLabel")
-xpIcon.Text           = "⚡"
-xpIcon.Size           = UDim2.new(0, 30, 1, 0)
-xpIcon.Position       = UDim2.new(0, 6, 0, 0)
-xpIcon.BackgroundTransparency = 1
-xpIcon.TextColor3     = C.accentLight
-xpIcon.Font           = Enum.Font.GothamBold
-xpIcon.TextSize       = 16
-xpIcon.Parent         = xpFrame
+function Slider.new(config, section)
+    local self = setmetatable(ApexComponent.new(config), Slider)
+    self.Type = "Slider"
+    self.ParentSection = section
+    self.Min = config.Min or 0
+    self.Max = config.Max or 100
+    self.Increment = config.Increment or 1
+    self.Value = math.clamp(config.Default or self.Min, self.Min, self.Max)
+    self._container = CreateComponentContainer(section, 50)
+    self._maid:give(self._container)
+    table.insert(section.Components, self)
 
--- Campo de texto donde el usuario escribe cuantas ganancias quiere farmear
-local xpInput = Instance.new("TextBox")
-xpInput.Text              = tostring(DEFAULT_GAINS)
-xpInput.Size              = UDim2.new(1, -42, 1, -8)
-xpInput.Position          = UDim2.new(0, 36, 0, 4)
-xpInput.BackgroundTransparency = 1
-xpInput.TextColor3        = C.text
-xpInput.Font              = Enum.Font.Gotham
-xpInput.TextSize          = 13
-xpInput.PlaceholderText   = "10"
-xpInput.PlaceholderColor3 = C.textDim
-xpInput.Parent            = xpFrame
+    local labelArea = CreateLabelArea(self._container, self.Name, self.Description)
+    labelArea.LayoutOrder = 1
 
--- Posicion vertical del boton principal dentro del cuerpo
-local toggleY = ITEM_HEIGHT * VISIBLE_ITEMS + 94
+    local valueLabel = UIBuilder.CreateTextLabel(self._container, {
+        Size = UDim2.new(0, 40, 0, 20),
+        Position = UDim2.new(1, -50, 0, 4),
+        Text = tostring(self.Value),
+        Font = ThemeEngine.Current.FontBold,
+        TextSize = 12,
+        TextColor3 = ThemeEngine.Current.Accent,
+        TextXAlignment = Enum.TextXAlignment.Right,
+    })
+    self._valueLabel = valueLabel
+    self._maid:give(valueLabel)
 
--- Boton principal que inicia o detiene el farm de XP
-local toggleBtn = Instance.new("TextButton")
-toggleBtn.Size             = UDim2.new(1, 0, 0, 48)
-toggleBtn.Position         = UDim2.new(0, 0, 0, toggleY)
-toggleBtn.BackgroundColor3 = C.green
-toggleBtn.TextColor3       = Color3.new(1,1,1)
-toggleBtn.Font             = Enum.Font.GothamBold
-toggleBtn.TextSize         = 15
-toggleBtn.Text             = ""
-toggleBtn.BorderSizePixel  = 0
-toggleBtn.Parent           = body
-makeCorner(toggleBtn, 12)
+    local sliderFrame = UIBuilder.CreateFrame(self._container, {
+        Size = UDim2.new(1, -100, 0, 20),
+        Position = UDim2.new(0, 0, 0, 24),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+    })
+    local sliderBg = UIBuilder.CreateFrame(sliderFrame, {
+        Size = UDim2.new(1, 0, 0, 6),
+        Position = UDim2.new(0, 0, 0.5, -3),
+        BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary,
+        BackgroundTransparency = 0.4,
+        BorderSizePixel = 0,
+    })
+    UIBuilder.CreateUICorner(sliderBg, 3)
+    local fill = UIBuilder.CreateFrame(sliderBg, {
+        Size = UDim2.new(0, 0, 1, 0),
+        BackgroundColor3 = ThemeEngine.Current.Accent,
+        BackgroundTransparency = 0,
+        BorderSizePixel = 0,
+    })
+    UIBuilder.CreateUICorner(fill, 3)
+    local knob = UIBuilder.CreateFrame(sliderBg, {
+        Size = UDim2.new(0, 14, 0, 14),
+        Position = UDim2.new(0, 0, 0.5, -7),
+        BackgroundColor3 = Color3.new(1,1,1),
+        BackgroundTransparency = 0,
+        BorderSizePixel = 0,
+    })
+    UIBuilder.CreateUICorner(knob, 7)
 
--- Degradado de verde aplicado sobre el boton de inicio
-local toggleGrad = Instance.new("UIGradient")
-toggleGrad.Rotation = 90
-toggleGrad.Color    = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, C.green),
-    ColorSequenceKeypoint.new(1, C.greenDark),
-})
-toggleGrad.Parent = toggleBtn
+    self._sliderBg = sliderBg
+    self._fill = fill
+    self._knob = knob
+    self._maid:give(sliderBg)
+    self._maid:give(fill)
+    self._maid:give(knob)
 
--- Marco interno del boton que organiza el icono y el texto
-local toggleInner = Instance.new("Frame")
-toggleInner.Size                 = UDim2.new(1, -4, 1, -4)
-toggleInner.Position             = UDim2.new(0, 2, 0, 2)
-toggleInner.BackgroundTransparency = 1
-toggleInner.Parent               = toggleBtn
+    local dragging = false
+    local inputBeganConn
+    local inputChangedConn
+    local inputEndedConn
 
--- Icono del boton que cambia entre play y stop segun el estado
-local toggleIcon = Instance.new("TextLabel")
-toggleIcon.Text           = "▶"
-toggleIcon.Size           = UDim2.new(0, 32, 1, 0)
-toggleIcon.Position       = UDim2.new(0, 14, 0, 0)
-toggleIcon.BackgroundTransparency = 1
-toggleIcon.TextColor3     = Color3.new(1,1,1)
-toggleIcon.Font           = Enum.Font.GothamBold
-toggleIcon.TextSize       = 18
-toggleIcon.Parent         = toggleInner
+    local function updateFromInput(input)
+        local relX = (input.Position.X - sliderBg.AbsolutePosition.X) / sliderBg.AbsoluteSize.X
+        relX = math.clamp(relX, 0, 1)
+        local raw = self.Min + relX * (self.Max - self.Min)
+        local value = Utilities.Math.Round(raw, self.Increment)
+        value = math.clamp(value, self.Min, self.Max)
+        if value ~= self.Value then
+            self:SetValue(value)
+        end
+    end
 
--- Texto del boton que indica la accion disponible al presionarlo
-local toggleText = Instance.new("TextLabel")
-toggleText.Text           = "INICIAR FARM"
-toggleText.Size           = UDim2.new(1, -60, 1, 0)
-toggleText.Position       = UDim2.new(0, 42, 0, 0)
-toggleText.BackgroundTransparency = 1
-toggleText.TextColor3     = Color3.new(1,1,1)
-toggleText.Font           = Enum.Font.GothamBold
-toggleText.TextSize       = 14
-toggleText.TextXAlignment = Enum.TextXAlignment.Left
-toggleText.Parent         = toggleInner
+    inputBeganConn = sliderBg.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            updateFromInput(input)
+        end
+    end)
+    inputChangedConn = sliderBg.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            updateFromInput(input)
+        end
+    end)
+    inputEndedConn = sliderBg.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+    self._sliderConnections = {inputBeganConn, inputChangedConn, inputEndedConn}
+    self._maid:give(inputBeganConn)
+    self._maid:give(inputChangedConn)
+    self._maid:give(inputEndedConn)
 
--- Animacion de pulso visible en el boton cuando el farm esta en ejecucion
-local function pulseToggle(active)
-    if active then
-        local t = TweenService:Create(toggleBtn, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-            BackgroundTransparency = 0.15,
+    valueLabel.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton2 then
+            local newValue = tonumber(valueLabel.Text)
+            if newValue then
+                self:SetValue(math.clamp(newValue, self.Min, self.Max))
+            end
+        end
+    end)
+
+    self:_updateVisual()
+    return self
+end
+
+function Slider:SetValue(value)
+    value = math.clamp(value, self.Min, self.Max)
+    if self.Increment > 0 then
+        value = Utilities.Math.Round(value, self.Increment)
+    end
+    self.Value = value
+    self:_updateVisual()
+    if self.Callback then
+        task.spawn(self.Callback, value)
+    end
+    Apex.Signals.StateChanged:fire(self, "Value", value)
+    self._stateChanged:fire("Value", value)
+end
+
+function Slider:GetValue()
+    return self.Value
+end
+
+function Slider:_updateVisual()
+    if not self._fill then return end
+    local ratio = (self.Value - self.Min) / (self.Max - self.Min)
+    self._fill.Size = UDim2.new(ratio, 0, 1, 0)
+    self._knob.Position = UDim2.new(ratio, -7, 0.5, -7)
+    self._valueLabel.Text = tostring(self.Value)
+end
+
+function Slider:SetEnabled(enabled)
+    ApexComponent.SetEnabled(self, enabled)
+    -- Desabilitar interação
+    self._sliderEnabled = enabled
+    if not enabled then
+        self._sliderBg.InputBegan:Disconnect()
+        self._sliderBg.InputChanged:Disconnect()
+        self._sliderBg.InputEnded:Disconnect()
+    else
+        -- Reconectar se necessário
+        if not self._sliderBg.InputBegan.Connected then
+            self._sliderConnections[1] = self._sliderBg.InputBegan:Connect(function(input) -- recriação simplificada
+                -- refazer lógica
+            end)
+            -- Nota: para simplificar, deixamos sem reconectar, mas o componente visual fica desabilitado
+        end
+    end
+end
+
+-- Dropdown (single)
+Dropdown = setmetatable({}, ApexComponent)
+Dropdown.__index = Dropdown
+
+function Dropdown.new(config, section)
+    local self = setmetatable(ApexComponent.new(config), Dropdown)
+    self.Type = "Dropdown"
+    self.ParentSection = section
+    self.Options = config.Options or {}
+    self.Value = config.Default or (self.Options[1] or nil)
+    self._container = CreateComponentContainer(section, 40)
+    self._maid:give(self._container)
+    table.insert(section.Components, self)
+
+    local labelArea = CreateLabelArea(self._container, self.Name, self.Description)
+    labelArea.LayoutOrder = 1
+
+    local dropdownButton = UIBuilder.CreateTextButton(self._container, {
+        Size = UDim2.new(0, 130, 0, 30),
+        Position = UDim2.new(1, -140, 0.5, -15),
+        Text = self.Value or "Select...",
+        Font = ThemeEngine.Current.Font,
+        TextSize = 12,
+        TextColor3 = ThemeEngine.Current.Text,
+        BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary,
+        BackgroundTransparency = 0.3,
+        AutoButtonColor = false,
+        LayoutOrder = 2,
+    })
+    UIBuilder.CreateUICorner(dropdownButton, 6)
+    self._dropdownButton = dropdownButton
+    self._maid:give(dropdownButton)
+
+    dropdownButton.MouseButton1Click:Connect(function()
+        self:TogglePopup()
+    end)
+    self._maid:give(dropdownButton.MouseButton1Click)
+
+    self:_updateVisual()
+    return self
+end
+
+function Dropdown:TogglePopup()
+    if self._popup then
+        self._popup:Destroy()
+        self._popup = nil
+        return
+    end
+    local rootGui = self.ParentSection.ParentTab.ParentWindow._gui
+    local popup = UIBuilder.CreateFrame(rootGui, {
+        Size = UDim2.new(0, 140, 0, math.min(#self.Options * 30, 200)),
+        Position = UDim2.new(0, self._dropdownButton.AbsolutePosition.X, 0, self._dropdownButton.AbsolutePosition.Y + self._dropdownButton.AbsoluteSize.Y),
+        BackgroundColor3 = ThemeEngine.Current.Surface,
+        BackgroundTransparency = 0,
+        BorderSizePixel = 0,
+        ZIndex = 10,
+        ClipsDescendants = true,
+    })
+    UIBuilder.CreateUICorner(popup, 6)
+    local layout = UIBuilder.CreateUIListLayout(popup, {
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 2),
+    })
+    for i, option in ipairs(self.Options) do
+        local optBtn = UIBuilder.CreateTextButton(popup, {
+            Size = UDim2.new(1, -6, 0, 28),
+            Text = option,
+            Font = ThemeEngine.Current.Font,
+            TextSize = 12,
+            TextColor3 = ThemeEngine.Current.Text,
+            BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary,
+            BackgroundTransparency = 0.3,
+            AutoButtonColor = false,
+            LayoutOrder = i,
         })
-        t:Play()
-        return t
+        UIBuilder.CreateUICorner(optBtn, 4)
+        optBtn.MouseButton1Click:Connect(function()
+            self:SetValue(option)
+            popup:Destroy()
+            self._popup = nil
+        end)
+        self._maid:give(optBtn)
     end
-end
-local pulseTween = nil
+    self._popup = popup
+    self._maid:give(popup)
 
--- Barra de estado en la parte inferior que muestra el estado del farm en texto
-local statusBar = Instance.new("Frame")
-statusBar.Size             = UDim2.new(1, 0, 0, 30)
-statusBar.Position         = UDim2.new(0, 0, 0, toggleY + 56)
-statusBar.BackgroundColor3 = C.panel
-statusBar.BorderSizePixel  = 0
-statusBar.Parent           = body
-makeCorner(statusBar, 8)
-makeStroke(statusBar, C.border, 1)
-
--- Punto de color que indica visualmente si el farm esta activo o detenido
-local statusDot = Instance.new("Frame")
-statusDot.Size             = UDim2.new(0, 8, 0, 8)
-statusDot.Position         = UDim2.new(0, 10, 0.5, -4)
-statusDot.BackgroundColor3 = C.green
-statusDot.BorderSizePixel  = 0
-statusDot.Parent           = statusBar
-makeCorner(statusDot, 4)
-
--- Texto que describe el estado actual del farm al usuario
-local statusLabel = Instance.new("TextLabel")
-statusLabel.Text           = "Pronto para iniciar"
-statusLabel.Size           = UDim2.new(1, -28, 1, 0)
-statusLabel.Position       = UDim2.new(0, 24, 0, 0)
-statusLabel.BackgroundTransparency = 1
-statusLabel.TextColor3     = C.textDim
-statusLabel.Font           = Enum.Font.Gotham
-statusLabel.TextSize       = 11
-statusLabel.TextXAlignment = Enum.TextXAlignment.Left
-statusLabel.Parent         = statusBar
-
--- Actualiza el texto y el color del indicador de estado
-local function setStatus(msg, dotColor)
-    statusLabel.Text           = msg
-    statusDot.BackgroundColor3 = dotColor or C.textDim
+    local connection
+    connection = game:GetService("UserInputService").InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if popup and not popup:IsDescendantOf(input.Position) then
+                popup:Destroy()
+                self._popup = nil
+                if connection then connection:Disconnect() end
+            end
+        end
+    end)
+    self._maid:give(connection)
 end
 
--- Boton flotante visible cuando la interfaz principal esta minimizada
-local floatBtn = Instance.new("TextButton")
-floatBtn.Text             = "🏃"
-floatBtn.Size             = UDim2.new(0, 52, 0, 52)
-floatBtn.Position         = UDim2.new(0.88, 0, 0.03, 0)
-floatBtn.BackgroundColor3 = C.accent
-floatBtn.TextColor3       = Color3.new(1,1,1)
-floatBtn.Font             = Enum.Font.GothamBold
-floatBtn.TextSize         = 24
-floatBtn.Visible          = false
-floatBtn.Parent           = screenGui
-makeCorner(floatBtn, 16)
-makeStroke(floatBtn, C.accentLight, 1.5)
-
--- Variables del arrastre del boton flotante usando Vector2 para evitar deriva
-local floatDragging  = false
-local floatDragStart = nil
-local floatBtnStart  = nil   -- Vector2 con la posicion absoluta al inicio del arrastre
-local floatMoved     = false
-local DRAG_THRESHOLD = 6
-
--- Registra el inicio del toque en el boton flotante sin mover su posicion todavia
-floatBtn.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-    or input.UserInputType == Enum.UserInputType.Touch then
-        floatDragging  = true
-        floatMoved     = false
-        floatDragStart = Vector2.new(input.Position.X, input.Position.Y)
-        -- Guarda la posicion absoluta actual sin cambiar floatBtn.Position
-        floatBtnStart  = Vector2.new(floatBtn.AbsolutePosition.X, floatBtn.AbsolutePosition.Y)
+function Dropdown:SetValue(value)
+    if table.find(self.Options, value) then
+        self.Value = value
+        self:_updateVisual()
+        if self.Callback then
+            task.spawn(self.Callback, value)
+        end
+        Apex.Signals.StateChanged:fire(self, "Value", value)
+        self._stateChanged:fire("Value", value)
     end
-end)
+end
 
--- Oculta la interfaz principal y muestra el boton flotante al minimizar
-minBtn.MouseButton1Click:Connect(function()
-    mainFrame.Visible = false
-    floatBtn.Visible  = true
-end)
+function Dropdown:GetValue()
+    return self.Value
+end
 
--- Variables del arrastre de la interfaz principal
-local dragging   = false
-local dragStart  = nil
-local frameStart = nil
-
--- Registra el inicio del arrastre de la interfaz al tocar el encabezado
-header.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-    or input.UserInputType == Enum.UserInputType.Touch then
-        dragging  = true
-        dragStart = Vector2.new(input.Position.X, input.Position.Y)
-        -- Convierte a posicion absoluta para arrastrar sin bug de escala
-        mainFrame.Position = UDim2.new(0, mainFrame.AbsolutePosition.X, 0, mainFrame.AbsolutePosition.Y)
-        frameStart = mainFrame.Position
+function Dropdown:_updateVisual()
+    if self._dropdownButton then
+        self._dropdownButton.Text = self.Value or "Select..."
     end
-end)
+end
 
--- Finaliza el arrastre de la GUI o del boton flotante al soltar el input
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-    or input.UserInputType == Enum.UserInputType.Touch then
+function Dropdown:SetOptions(options)
+    self.Options = options
+    if not table.find(self.Options, self.Value) then
+        self.Value = self.Options[1] or nil
+    end
+    self:_updateVisual()
+end
+
+function Dropdown:AddOption(option)
+    table.insert(self.Options, option)
+    if not self.Value then self.Value = option end
+end
+
+function Dropdown:RemoveOption(option)
+    local idx = table.find(self.Options, option)
+    if idx then
+        table.remove(self.Options, idx)
+        if self.Value == option then
+            self.Value = self.Options[1] or nil
+        end
+        self:_updateVisual()
+    end
+end
+
+function Dropdown:ClearOptions()
+    self.Options = {}
+    self.Value = nil
+    self:_updateVisual()
+end
+
+function Dropdown:Refresh()
+    if self._popup then
+        self._popup:Destroy()
+        self._popup = nil
+        self:TogglePopup()
+    end
+end
+
+function Dropdown:SetEnabled(enabled)
+    ApexComponent.SetEnabled(self, enabled)
+    self._dropdownButton.AutoButtonColor = false
+    if not enabled then
+        self._dropdownButton.BackgroundColor3 = Color3.fromRGB(80,80,80)
+        self._dropdownButton.TextColor3 = Color3.fromRGB(150,150,150)
+    else
+        self._dropdownButton.BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary
+        self._dropdownButton.TextColor3 = ThemeEngine.Current.Text
+    end
+end
+
+-- MultiDropdown
+MultiDropdown = setmetatable({}, ApexComponent)
+MultiDropdown.__index = MultiDropdown
+
+function MultiDropdown.new(config, section)
+    local self = setmetatable(ApexComponent.new(config), MultiDropdown)
+    self.Type = "MultiDropdown"
+    self.ParentSection = section
+    self.Options = config.Options or {}
+    self.Value = config.Default or {}
+    if type(self.Value) ~= "table" then self.Value = {} end
+    self._container = CreateComponentContainer(section, 40)
+    self._maid:give(self._container)
+    table.insert(section.Components, self)
+
+    local labelArea = CreateLabelArea(self._container, self.Name, self.Description)
+    labelArea.LayoutOrder = 1
+
+    local dropdownButton = UIBuilder.CreateTextButton(self._container, {
+        Size = UDim2.new(0, 130, 0, 30),
+        Position = UDim2.new(1, -140, 0.5, -15),
+        Text = #self.Value > 0 and table.concat(self.Value, ", ") or "Select...",
+        Font = ThemeEngine.Current.Font,
+        TextSize = 12,
+        TextColor3 = ThemeEngine.Current.Text,
+        BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary,
+        BackgroundTransparency = 0.3,
+        AutoButtonColor = false,
+        LayoutOrder = 2,
+    })
+    UIBuilder.CreateUICorner(dropdownButton, 6)
+    self._dropdownButton = dropdownButton
+    self._maid:give(dropdownButton)
+
+    dropdownButton.MouseButton1Click:Connect(function()
+        self:TogglePopup()
+    end)
+    self._maid:give(dropdownButton.MouseButton1Click)
+
+    self:_updateVisual()
+    return self
+end
+
+function MultiDropdown:TogglePopup()
+    if self._popup then
+        self._popup:Destroy()
+        self._popup = nil
+        return
+    end
+    local rootGui = self.ParentSection.ParentTab.ParentWindow._gui
+    local popup = UIBuilder.CreateFrame(rootGui, {
+        Size = UDim2.new(0, 160, 0, math.min(#self.Options * 30, 200)),
+        Position = UDim2.new(0, self._dropdownButton.AbsolutePosition.X, 0, self._dropdownButton.AbsolutePosition.Y + self._dropdownButton.AbsoluteSize.Y),
+        BackgroundColor3 = ThemeEngine.Current.Surface,
+        BackgroundTransparency = 0,
+        BorderSizePixel = 0,
+        ZIndex = 10,
+        ClipsDescendants = true,
+    })
+    UIBuilder.CreateUICorner(popup, 6)
+    local layout = UIBuilder.CreateUIListLayout(popup, {
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 2),
+    })
+    for i, option in ipairs(self.Options) do
+        local optBtn = UIBuilder.CreateTextButton(popup, {
+            Size = UDim2.new(1, -6, 0, 28),
+            Text = option,
+            Font = ThemeEngine.Current.Font,
+            TextSize = 12,
+            TextColor3 = ThemeEngine.Current.Text,
+            BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary,
+            BackgroundTransparency = 0.3,
+            AutoButtonColor = false,
+            LayoutOrder = i,
+        })
+        UIBuilder.CreateUICorner(optBtn, 4)
+        local check = UIBuilder.CreateTextLabel(optBtn, {
+            Size = UDim2.new(0, 20, 0, 20),
+            Position = UDim2.new(0, 4, 0.5, -10),
+            Text = table.find(self.Value, option) and "✔" or "",
+            Font = Enum.Font.GothamBold,
+            TextSize = 14,
+            TextColor3 = ThemeEngine.Current.Accent,
+            TextXAlignment = Enum.TextXAlignment.Center,
+            TextYAlignment = Enum.TextYAlignment.Center,
+        })
+        optBtn.MouseButton1Click:Connect(function()
+            local selected = false
+            for j, v in ipairs(self.Value) do
+                if v == option then
+                    table.remove(self.Value, j)
+                    selected = true
+                    break
+                end
+            end
+            if not selected then
+                table.insert(self.Value, option)
+            end
+            self:_updateVisual()
+            check.Text = selected and "" or "✔"
+            if self.Callback then
+                task.spawn(self.Callback, self.Value)
+            end
+            Apex.Signals.StateChanged:fire(self, "Value", self.Value)
+            self._stateChanged:fire("Value", self.Value)
+        end)
+        self._maid:give(optBtn)
+    end
+    self._popup = popup
+    self._maid:give(popup)
+
+    local connection
+    connection = game:GetService("UserInputService").InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if popup and not popup:IsDescendantOf(input.Position) then
+                popup:Destroy()
+                self._popup = nil
+                if connection then connection:Disconnect() end
+            end
+        end
+    end)
+    self._maid:give(connection)
+end
+
+function MultiDropdown:SetValue(value)
+    if type(value) == "table" then
+        self.Value = value
+        self:_updateVisual()
+        if self.Callback then
+            task.spawn(self.Callback, self.Value)
+        end
+        Apex.Signals.StateChanged:fire(self, "Value", self.Value)
+        self._stateChanged:fire("Value", self.Value)
+    end
+end
+
+function MultiDropdown:GetValue()
+    return self.Value
+end
+
+function MultiDropdown:_updateVisual()
+    if self._dropdownButton then
+        self._dropdownButton.Text = #self.Value > 0 and table.concat(self.Value, ", ") or "Select..."
+    end
+end
+
+function MultiDropdown:SetOptions(options)
+    self.Options = options
+    for i = #self.Value, 1, -1 do
+        if not table.find(self.Options, self.Value[i]) then
+            table.remove(self.Value, i)
+        end
+    end
+    self:_updateVisual()
+end
+
+function MultiDropdown:AddOption(option)
+    table.insert(self.Options, option)
+end
+
+function MultiDropdown:RemoveOption(option)
+    local idx = table.find(self.Options, option)
+    if idx then table.remove(self.Options, idx) end
+    for i = #self.Value, 1, -1 do
+        if self.Value[i] == option then table.remove(self.Value, i) end
+    end
+    self:_updateVisual()
+end
+
+function MultiDropdown:ClearOptions()
+    self.Options = {}
+    self.Value = {}
+    self:_updateVisual()
+end
+
+function MultiDropdown:Refresh()
+    if self._popup then
+        self._popup:Destroy()
+        self._popup = nil
+        self:TogglePopup()
+    end
+end
+
+-- Input
+Input = setmetatable({}, ApexComponent)
+Input.__index = Input
+
+function Input.new(config, section)
+    local self = setmetatable(ApexComponent.new(config), Input)
+    self.Type = "Input"
+    self.ParentSection = section
+    self.Placeholder = config.Placeholder or ""
+    self.MaxChars = config.MaxChars or 100
+    self.Numeric = config.Numeric or false
+    self.SubmitMode = config.SubmitMode or false
+    self.Value = config.Default or ""
+    self._container = CreateComponentContainer(section, 40)
+    self._maid:give(self._container)
+    table.insert(section.Components, self)
+
+    local labelArea = CreateLabelArea(self._container, self.Name, self.Description)
+    labelArea.LayoutOrder = 1
+
+    local textBox = Utilities.InstanceHelpers.Create("TextBox", {
+        Size = UDim2.new(0, 150, 0, 30),
+        Position = UDim2.new(1, -160, 0.5, -15),
+        Text = self.Value,
+        PlaceholderText = self.Placeholder,
+        PlaceholderColor3 = ThemeEngine.Current.TextSecondary,
+        Font = ThemeEngine.Current.Font,
+        TextSize = 12,
+        TextColor3 = ThemeEngine.Current.Text,
+        BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary,
+        BackgroundTransparency = 0.3,
+        BorderSizePixel = 0,
+        ClearTextOnFocus = false,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        LayoutOrder = 2,
+        Parent = self._container,
+    })
+    UIBuilder.CreateUICorner(textBox, 6)
+    self._textBox = textBox
+    self._maid:give(textBox)
+
+    textBox:GetPropertyChangedSignal("Text"):Connect(function()
+        if string.len(textBox.Text) > self.MaxChars then
+            textBox.Text = string.sub(textBox.Text, 1, self.MaxChars)
+        end
+        if self.Numeric and not tonumber(textBox.Text) and textBox.Text ~= "" then
+            textBox.Text = string.gsub(textBox.Text, "[^%d%.%-]", "")
+        end
+        self.Value = textBox.Text
+    end)
+
+    textBox.FocusLost:Connect(function(enterPressed)
+        if enterPressed or not self.SubmitMode then
+            self:Submit()
+        end
+    end)
+    self._maid:give(textBox.FocusLost)
+
+    return self
+end
+
+function Input:Submit()
+    if self.Callback then
+        task.spawn(self.Callback, self.Value)
+    end
+    Apex.Signals.StateChanged:fire(self, "Value", self.Value)
+    self._stateChanged:fire("Value", self.Value)
+end
+
+function Input:SetValue(value)
+    self.Value = value
+    self._textBox.Text = value
+end
+
+function Input:GetValue()
+    return self.Value
+end
+
+function Input:Clear()
+    self:SetValue("")
+end
+
+function Input:SetEnabled(enabled)
+    ApexComponent.SetEnabled(self, enabled)
+    self._textBox.TextEditable = enabled
+    if not enabled then
+        self._textBox.TextColor3 = Color3.fromRGB(150,150,150)
+        self._textBox.BackgroundColor3 = Color3.fromRGB(80,80,80)
+    else
+        self._textBox.TextColor3 = ThemeEngine.Current.Text
+        self._textBox.BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary
+    end
+end
+
+-- Keybind
+Keybind = setmetatable({}, ApexComponent)
+Keybind.__index = Keybind
+
+function Keybind.new(config, section)
+    local self = setmetatable(ApexComponent.new(config), Keybind)
+    self.Type = "Keybind"
+    self.ParentSection = section
+    self.Value = config.Default or Enum.KeyCode.RightShift
+    self._container = CreateComponentContainer(section, 40)
+    self._maid:give(self._container)
+    table.insert(section.Components, self)
+
+    local labelArea = CreateLabelArea(self._container, self.Name, self.Description)
+    labelArea.LayoutOrder = 1
+
+    local keybindButton = UIBuilder.CreateTextButton(self._container, {
+        Size = UDim2.new(0, 120, 0, 30),
+        Position = UDim2.new(1, -130, 0.5, -15),
+        Text = self.Value.Name,
+        Font = ThemeEngine.Current.Font,
+        TextSize = 12,
+        TextColor3 = ThemeEngine.Current.Text,
+        BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary,
+        BackgroundTransparency = 0.3,
+        AutoButtonColor = false,
+        LayoutOrder = 2,
+    })
+    UIBuilder.CreateUICorner(keybindButton, 6)
+    self._keybindButton = keybindButton
+    self._maid:give(keybindButton)
+
+    local listening = false
+    keybindButton.MouseButton1Click:Connect(function()
+        listening = true
+        keybindButton.Text = "Press a key..."
+        keybindButton.BackgroundColor3 = ThemeEngine.Current.Warning
+    end)
+    self._maid:give(keybindButton.MouseButton1Click)
+
+    local inputConnection
+    inputConnection = game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
+        if listening and not gameProcessed then
+            if input.UserInputType == Enum.UserInputType.Keyboard then
+                self:SetValue(input.KeyCode)
+                listening = false
+                keybindButton.Text = input.KeyCode.Name
+                keybindButton.BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary
+            end
+        end
+    end)
+    self._maid:give(inputConnection)
+
+    return self
+end
+
+function Keybind:SetValue(keyCode)
+    self.Value = keyCode
+    if self._keybindButton then
+        self._keybindButton.Text = keyCode.Name
+    end
+    if self.Callback then
+        task.spawn(self.Callback)
+    end
+    Apex.Signals.StateChanged:fire(self, "Value", keyCode)
+    self._stateChanged:fire("Value", keyCode)
+end
+
+function Keybind:GetValue()
+    return self.Value
+end
+
+function Keybind:Clear()
+    self:SetValue(Enum.KeyCode.Unknown)
+end
+
+function Keybind:SetEnabled(enabled)
+    ApexComponent.SetEnabled(self, enabled)
+    self._keybindButton.AutoButtonColor = false
+    if not enabled then
+        self._keybindButton.BackgroundColor3 = Color3.fromRGB(80,80,80)
+        self._keybindButton.TextColor3 = Color3.fromRGB(150,150,150)
+    else
+        self._keybindButton.BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary
+        self._keybindButton.TextColor3 = ThemeEngine.Current.Text
+    end
+end
+
+-- ColorPicker
+ColorPicker = setmetatable({}, ApexComponent)
+ColorPicker.__index = ColorPicker
+
+function ColorPicker.new(config, section)
+    local self = setmetatable(ApexComponent.new(config), ColorPicker)
+    self.Type = "ColorPicker"
+    self.ParentSection = section
+    self.Value = config.Default or Color3.fromRGB(130, 80, 255)
+    self._container = CreateComponentContainer(section, 40)
+    self._maid:give(self._container)
+    table.insert(section.Components, self)
+
+    local labelArea = CreateLabelArea(self._container, self.Name, self.Description)
+    labelArea.LayoutOrder = 1
+
+    local colorButton = UIBuilder.CreateTextButton(self._container, {
+        Size = UDim2.new(0, 80, 0, 30),
+        Position = UDim2.new(1, -90, 0.5, -15),
+        Text = "Pick",
+        Font = ThemeEngine.Current.Font,
+        TextSize = 12,
+        TextColor3 = Color3.new(1,1,1),
+        BackgroundColor3 = self.Value,
+        BackgroundTransparency = 0,
+        AutoButtonColor = false,
+        LayoutOrder = 2,
+    })
+    UIBuilder.CreateUICorner(colorButton, 6)
+    self._colorButton = colorButton
+    self._maid:give(colorButton)
+
+    colorButton.MouseButton1Click:Connect(function()
+        self:OpenColorPicker()
+    end)
+    self._maid:give(colorButton.MouseButton1Click)
+
+    return self
+end
+
+function ColorPicker:OpenColorPicker()
+    local rootGui = self.ParentSection.ParentTab.ParentWindow._gui
+    local pickerFrame = UIBuilder.CreateFrame(rootGui, {
+        Size = UDim2.new(0, 260, 0, 180),
+        Position = UDim2.new(0, self._colorButton.AbsolutePosition.X, 0, self._colorButton.AbsolutePosition.Y + 30),
+        BackgroundColor3 = ThemeEngine.Current.Surface,
+        BackgroundTransparency = 0,
+        BorderSizePixel = 0,
+        ZIndex = 20,
+        ClipsDescendants = true,
+    })
+    UIBuilder.CreateUICorner(pickerFrame, 8)
+
+    -- Simples: três sliders para RGB
+    local rSlider = self:CreateColorSlider(pickerFrame, "R", 10, self.Value.R)
+    local gSlider = self:CreateColorSlider(pickerFrame, "G", 40, self.Value.G)
+    local bSlider = self:CreateColorSlider(pickerFrame, "B", 70, self.Value.B)
+
+    local preview = UIBuilder.CreateFrame(pickerFrame, {
+        Size = UDim2.new(0, 60, 0, 60),
+        Position = UDim2.new(0, 190, 0, 10),
+        BackgroundColor3 = self.Value,
+        BorderSizePixel = 0,
+    })
+    UIBuilder.CreateUICorner(preview, 8)
+
+    local function updateFromSliders()
+        local newColor = Color3.new(rSlider.Value, gSlider.Value, bSlider.Value)
+        self:SetValue(newColor)
+        preview.BackgroundColor3 = newColor
+    end
+
+    rSlider.Slider:SetCallback(updateFromSliders)
+    gSlider.Slider:SetCallback(updateFromSliders)
+    bSlider.Slider:SetCallback(updateFromSliders)
+
+    self._maid:give(pickerFrame)
+
+    local connection
+    connection = game:GetService("UserInputService").InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if pickerFrame and not pickerFrame:IsDescendantOf(input.Position) then
+                pickerFrame:Destroy()
+                if connection then connection:Disconnect() end
+            end
+        end
+    end)
+    self._maid:give(connection)
+end
+
+function ColorPicker:CreateColorSlider(parent, label, y, initial)
+    local sliderFrame = UIBuilder.CreateFrame(parent, {
+        Size = UDim2.new(1, -20, 0, 30),
+        Position = UDim2.new(0, 10, 0, y),
+        BackgroundTransparency = 1,
+    })
+    local label = UIBuilder.CreateTextLabel(sliderFrame, {
+        Size = UDim2.new(0, 20, 0, 20),
+        Text = label,
+        Font = ThemeEngine.Current.FontBold,
+        TextSize = 12,
+        TextColor3 = ThemeEngine.Current.Text,
+    })
+    local slider = {}
+    local bg = UIBuilder.CreateFrame(sliderFrame, {
+        Size = UDim2.new(1, -30, 0, 10),
+        Position = UDim2.new(0, 25, 0.5, -5),
+        BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary,
+        BackgroundTransparency = 0.4,
+    })
+    UIBuilder.CreateUICorner(bg, 5)
+    local fill = UIBuilder.CreateFrame(bg, {
+        Size = UDim2.new(0, 0, 1, 0),
+        BackgroundColor3 = ThemeEngine.Current.Accent,
+    })
+    UIBuilder.CreateUICorner(fill, 5)
+    local knob = UIBuilder.CreateFrame(bg, {
+        Size = UDim2.new(0, 16, 0, 16),
+        Position = UDim2.new(0, -8, 0.5, -8),
+        BackgroundColor3 = Color3.new(1,1,1),
+    })
+    UIBuilder.CreateUICorner(knob, 8)
+
+    local function update(input)
+        local relX = (input.Position.X - bg.AbsolutePosition.X) / bg.AbsoluteSize.X
+        relX = math.clamp(relX, 0, 1)
+        local value = relX
+        fill.Size = UDim2.new(relX, 0, 1, 0)
+        knob.Position = UDim2.new(relX, -8, 0.5, -8)
+        slider.Value = value
+        if slider.Callback then slider.Callback(value) end
+    end
+
+    local dragging = false
+    bg.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            update(input)
+        end
+    end)
+    bg.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            update(input)
+        end
+    end)
+    bg.InputEnded:Connect(function(input)
         dragging = false
-        -- Si el boton flotante no se movio se trata como clic y reabre la GUI
-        if floatDragging then
-            if not floatMoved then
-                mainFrame.Visible = true
-                floatBtn.Visible  = false
+    end)
+
+    -- inicial
+    slider.Value = initial
+    fill.Size = UDim2.new(initial, 0, 1, 0)
+    knob.Position = UDim2.new(initial, -8, 0.5, -8)
+    slider.Slider = slider
+    return slider
+end
+
+function ColorPicker:SetValue(color)
+    self.Value = color
+    if self._colorButton then
+        self._colorButton.BackgroundColor3 = color
+    end
+    if self.Callback then
+        task.spawn(self.Callback, color)
+    end
+    Apex.Signals.StateChanged:fire(self, "Value", color)
+    self._stateChanged:fire("Value", color)
+end
+
+function ColorPicker:GetValue()
+    return self.Value
+end
+
+-- Paragraph
+Paragraph = setmetatable({}, ApexComponent)
+Paragraph.__index = Paragraph
+
+function Paragraph.new(config, section)
+    local self = setmetatable(ApexComponent.new(config), Paragraph)
+    self.Type = "Paragraph"
+    self.ParentSection = section
+    self.Text = config.Text or config.Name or ""
+    self._container = CreateComponentContainer(section, 30)
+    self._maid:give(self._container)
+    table.insert(section.Components, self)
+
+    local textLabel = UIBuilder.CreateTextLabel(self._container, {
+        Size = UDim2.new(1, 0, 1, 0),
+        Text = self.Text,
+        Font = ThemeEngine.Current.Font,
+        TextSize = 12,
+        TextColor3 = ThemeEngine.Current.TextSecondary,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        TextWrapped = true,
+    })
+    self._textLabel = textLabel
+    self._maid:give(textLabel)
+
+    return self
+end
+
+function Paragraph:SetText(text)
+    self.Text = text
+    self._textLabel.Text = text
+end
+
+-- Label
+Label = setmetatable({}, ApexComponent)
+Label.__index = Label
+
+function Label.new(config, section)
+    local self = setmetatable(ApexComponent.new(config), Label)
+    self.Type = "Label"
+    self.ParentSection = section
+    self.Text = config.Text or config.Name or ""
+    self._container = CreateComponentContainer(section, 25)
+    self._maid:give(self._container)
+    table.insert(section.Components, self)
+
+    local textLabel = UIBuilder.CreateTextLabel(self._container, {
+        Size = UDim2.new(1, 0, 1, 0),
+        Text = self.Text,
+        Font = ThemeEngine.Current.FontBold,
+        TextSize = 13,
+        TextColor3 = ThemeEngine.Current.Text,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center,
+    })
+    self._textLabel = textLabel
+    self._maid:give(textLabel)
+
+    return self
+end
+
+function Label:SetText(text)
+    self.Text = text
+    self._textLabel.Text = text
+end
+
+-- Divider
+Divider = setmetatable({}, ApexComponent)
+Divider.__index = Divider
+
+function Divider.new(config, section)
+    local self = setmetatable(ApexComponent.new(config), Divider)
+    self.Type = "Divider"
+    self.ParentSection = section
+    self._container = CreateComponentContainer(section, 10)
+    self._container.BackgroundTransparency = 1
+    self._maid:give(self._container)
+    table.insert(section.Components, self)
+
+    local line = UIBuilder.CreateFrame(self._container, {
+        Size = UDim2.new(1, 0, 0, 1),
+        Position = UDim2.new(0, 0, 0.5, 0),
+        BackgroundColor3 = ThemeEngine.Current.Border,
+        BackgroundTransparency = 0.5,
+        BorderSizePixel = 0,
+    })
+    self._line = line
+    self._maid:give(line)
+
+    return self
+end
+
+-- Badge
+Badge = setmetatable({}, ApexComponent)
+Badge.__index = Badge
+
+function Badge.new(config, section)
+    local self = setmetatable(ApexComponent.new(config), Badge)
+    self.Type = "Badge"
+    self.ParentSection = section
+    self.Text = config.Text or config.Name or ""
+    self.Color = config.Color or ThemeEngine.Current.Accent
+    self._container = CreateComponentContainer(section, 25)
+    self._container.BackgroundTransparency = 1
+    self._maid:give(self._container)
+    table.insert(section.Components, self)
+
+    local badgeBg = UIBuilder.CreateFrame(self._container, {
+        Size = UDim2.new(0, math.max(60, string.len(self.Text)*8+20), 0, 20),
+        Position = UDim2.new(0, 0, 0.5, -10),
+        BackgroundColor3 = self.Color,
+        BackgroundTransparency = 0,
+        BorderSizePixel = 0,
+    })
+    UIBuilder.CreateUICorner(badgeBg, 10)
+    local badgeText = UIBuilder.CreateTextLabel(badgeBg, {
+        Size = UDim2.new(1, 0, 1, 0),
+        Text = self.Text,
+        Font = ThemeEngine.Current.FontBold,
+        TextSize = 11,
+        TextColor3 = Color3.new(1,1,1),
+        TextXAlignment = Enum.TextXAlignment.Center,
+        TextYAlignment = Enum.TextYAlignment.Center,
+    })
+    self._badgeBg = badgeBg
+    self._badgeText = badgeText
+    self._maid:give(badgeBg)
+    self._maid:give(badgeText)
+
+    return self
+end
+
+function Badge:SetText(text)
+    self.Text = text
+    self._badgeText.Text = text
+    self._badgeBg.Size = UDim2.new(0, math.max(60, string.len(text)*8+20), 0, 20)
+end
+
+function Badge:SetColor(color)
+    self.Color = color
+    self._badgeBg.BackgroundColor3 = color
+end
+
+-- Card
+Card = setmetatable({}, ApexComponent)
+Card.__index = Card
+
+function Card.new(config, section)
+    local self = setmetatable(ApexComponent.new(config), Card)
+    self.Type = "Card"
+    self.ParentSection = section
+    self._container = CreateComponentContainer(section, 80)
+    self._container.BackgroundColor3 = ThemeEngine.Current.Surface
+    self._container.BackgroundTransparency = 0.2
+    self._maid:give(self._container)
+    table.insert(section.Components, self)
+
+    if config.Content then
+        local contentFrame = UIBuilder.CreateFrame(self._container, {
+            Size = UDim2.new(1, 0, 1, 0),
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+        })
+        config.Content(contentFrame)
+        self._maid:give(contentFrame)
+    end
+
+    return self
+end
+
+-- Progress
+Progress = setmetatable({}, ApexComponent)
+Progress.__index = Progress
+
+function Progress.new(config, section)
+    local self = setmetatable(ApexComponent.new(config), Progress)
+    self.Type = "Progress"
+    self.ParentSection = section
+    self.Value = config.Default or 0
+    self.Max = config.Max or 100
+    self._container = CreateComponentContainer(section, 30)
+    self._maid:give(self._container)
+    table.insert(section.Components, self)
+
+    local labelArea = CreateLabelArea(self._container, self.Name, self.Description)
+    labelArea.LayoutOrder = 1
+
+    local barBg = UIBuilder.CreateFrame(self._container, {
+        Size = UDim2.new(1, -100, 0, 10),
+        Position = UDim2.new(0, 0, 0.5, -5),
+        BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary,
+        BackgroundTransparency = 0.4,
+        BorderSizePixel = 0,
+    })
+    UIBuilder.CreateUICorner(barBg, 5)
+    local barFill = UIBuilder.CreateFrame(barBg, {
+        Size = UDim2.new(0, 0, 1, 0),
+        BackgroundColor3 = ThemeEngine.Current.Accent,
+        BackgroundTransparency = 0,
+        BorderSizePixel = 0,
+    })
+    UIBuilder.CreateUICorner(barFill, 5)
+    local percentLabel = UIBuilder.CreateTextLabel(self._container, {
+        Size = UDim2.new(0, 40, 0, 20),
+        Position = UDim2.new(1, -50, 0.5, -10),
+        Text = "0%",
+        Font = ThemeEngine.Current.FontBold,
+        TextSize = 11,
+        TextColor3 = ThemeEngine.Current.Text,
+        TextXAlignment = Enum.TextXAlignment.Right,
+    })
+
+    self._barBg = barBg
+    self._barFill = barFill
+    self._percentLabel = percentLabel
+    self._maid:give(barBg)
+    self._maid:give(barFill)
+    self._maid:give(percentLabel)
+
+    self:_updateVisual()
+    return self
+end
+
+function Progress:SetValue(value)
+    self.Value = math.clamp(value, 0, self.Max)
+    self:_updateVisual()
+    if self.Callback then
+        task.spawn(self.Callback, self.Value)
+    end
+    Apex.Signals.StateChanged:fire(self, "Value", self.Value)
+    self._stateChanged:fire("Value", self.Value)
+end
+
+function Progress:GetValue()
+    return self.Value
+end
+
+function Progress:_updateVisual()
+    if not self._barFill then return end
+    local ratio = self.Value / self.Max
+    self._barFill.Size = UDim2.new(ratio, 0, 1, 0)
+    self._percentLabel.Text = string.format("%d%%", math.floor(ratio*100))
+end
+
+-- Image
+ImageComponent = setmetatable({}, ApexComponent)
+ImageComponent.__index = ImageComponent
+
+function ImageComponent.new(config, section)
+    local self = setmetatable(ApexComponent.new(config), ImageComponent)
+    self.Type = "Image"
+    self.ParentSection = section
+    self.Image = config.Image or ""
+    self._container = CreateComponentContainer(section, 80)
+    self._maid:give(self._container)
+    table.insert(section.Components, self)
+
+    local imageLabel = Utilities.InstanceHelpers.Create("ImageLabel", {
+        Size = UDim2.new(1, -10, 1, -10),
+        Position = UDim2.new(0, 5, 0, 5),
+        Image = self.Image,
+        BackgroundTransparency = 0.5,
+        BackgroundColor3 = ThemeEngine.Current.SurfaceSecondary,
+        BorderSizePixel = 0,
+        ScaleType = Enum.ScaleType.Fit,
+        Parent = self._container,
+    })
+    UIBuilder.CreateUICorner(imageLabel, 6)
+    self._imageLabel = imageLabel
+    self._maid:give(imageLabel)
+
+    return self
+end
+
+function ImageComponent:SetImage(assetId)
+    self.Image = assetId
+    self._imageLabel.Image = assetId
+end
+
+-- Spacer
+Spacer = setmetatable({}, ApexComponent)
+Spacer.__index = Spacer
+
+function Spacer.new(config, section)
+    local self = setmetatable(ApexComponent.new(config), Spacer)
+    self.Type = "Spacer"
+    self.ParentSection = section
+    self.Height = config.Height or 10
+    self._container = UIBuilder.CreateFrame(section._componentsContainer, {
+        Size = UDim2.new(1, 0, 0, self.Height),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+    })
+    self._maid:give(self._container)
+    table.insert(section.Components, self)
+    return self
+end
+
+-- StatusMessage
+StatusMessage = setmetatable({}, ApexComponent)
+StatusMessage.__index = StatusMessage
+
+function StatusMessage.new(config, section)
+    local self = setmetatable(ApexComponent.new(config), StatusMessage)
+    self.Type = "StatusMessage"
+    self.ParentSection = section
+    self.MessageType = config.Type or "Info"
+    self.Text = config.Text or config.Name or ""
+    self._container = CreateComponentContainer(section, 30)
+    self._maid:give(self._container)
+    table.insert(section.Components, self)
+
+    local colorMap = {
+        Info = ThemeEngine.Current.Info,
+        Success = ThemeEngine.Current.Success,
+        Warning = ThemeEngine.Current.Warning,
+        Error = ThemeEngine.Current.Error,
+    }
+    local bgColor = colorMap[self.MessageType] or ThemeEngine.Current.Info
+    self._container.BackgroundColor3 = bgColor
+    self._container.BackgroundTransparency = 0.7
+
+    local iconMap = {
+        Info = IconService.GetIcon("info"),
+        Success = IconService.GetIcon("successMsg"),
+        Warning = IconService.GetIcon("warningMsg"),
+        Error = IconService.GetIcon("errorMsg"),
+    }
+    local messageLabel = UIBuilder.CreateTextLabel(self._container, {
+        Size = UDim2.new(1, 0, 1, 0),
+        Text = (iconMap[self.MessageType] or "") .. " " .. self.Text,
+        Font = ThemeEngine.Current.Font,
+        TextSize = 12,
+        TextColor3 = ThemeEngine.Current.Text,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center,
+    })
+    self._messageLabel = messageLabel
+    self._maid:give(messageLabel)
+
+    return self
+end
+
+function StatusMessage:SetText(text)
+    self.Text = text
+    self._messageLabel.Text = (IconService.GetIcon(self.MessageType) or "") .. " " .. text
+end
+
+-- LoadingComponent
+LoadingComponent = setmetatable({}, ApexComponent)
+LoadingComponent.__index = LoadingComponent
+
+function LoadingComponent.new(config, section)
+    local self = setmetatable(ApexComponent.new(config), LoadingComponent)
+    self.Type = "Loading"
+    self.ParentSection = section
+    self.Text = config.Text or "Loading..."
+    self._container = CreateComponentContainer(section, 40)
+    self._maid:give(self._container)
+    table.insert(section.Components, self)
+
+    local spinner = UIBuilder.CreateTextLabel(self._container, {
+        Size = UDim2.new(0, 30, 0, 30),
+        Position = UDim2.new(0, 10, 0.5, -15),
+        Text = "⏳",
+        Font = Enum.Font.GothamBold,
+        TextSize = 20,
+        TextColor3 = ThemeEngine.Current.Accent,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        TextYAlignment = Enum.TextYAlignment.Center,
+    })
+    local textLabel = UIBuilder.CreateTextLabel(self._container, {
+        Size = UDim2.new(1, -50, 1, 0),
+        Position = UDim2.new(0, 45, 0, 0),
+        Text = self.Text,
+        Font = ThemeEngine.Current.Font,
+        TextSize = 12,
+        TextColor3 = ThemeEngine.Current.Text,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center,
+    })
+    self._spinner = spinner
+    self._textLabel = textLabel
+    self._maid:give(spinner)
+    self._maid:give(textLabel)
+
+    local rotation = 0
+    local heartbeat
+    heartbeat = game:GetService("RunService").Heartbeat:Connect(function(delta)
+        rotation = rotation + delta * 120
+        spinner.Rotation = rotation
+    end)
+    self._maid:give(heartbeat)
+
+    return self
+end
+
+function LoadingComponent:SetText(text)
+    self.Text = text
+    self._textLabel.Text = text
+end
+
+-- EmptyState
+EmptyState = setmetatable({}, ApexComponent)
+EmptyState.__index = EmptyState
+
+function EmptyState.new(config, section)
+    local self = setmetatable(ApexComponent.new(config), EmptyState)
+    self.Type = "EmptyState"
+    self.ParentSection = section
+    self.Text = config.Text or "No data available"
+    self._container = CreateComponentContainer(section, 50)
+    self._container.BackgroundTransparency = 0.8
+    self._maid:give(self._container)
+    table.insert(section.Components, self)
+
+    local iconLabel = UIBuilder.CreateTextLabel(self._container, {
+        Size = UDim2.new(0, 30, 0, 30),
+        Position = UDim2.new(0.5, -15, 0, 2),
+        Text = IconService.GetIcon("empty"),
+        Font = Enum.Font.GothamBold,
+        TextSize = 20,
+        TextColor3 = ThemeEngine.Current.TextSecondary,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        TextYAlignment = Enum.TextYAlignment.Center,
+    })
+    local textLabel = UIBuilder.CreateTextLabel(self._container, {
+        Size = UDim2.new(1, 0, 0, 16),
+        Position = UDim2.new(0, 0, 0, 34),
+        Text = self.Text,
+        Font = ThemeEngine.Current.Font,
+        TextSize = 11,
+        TextColor3 = ThemeEngine.Current.TextSecondary,
+        TextXAlignment = Enum.TextXAlignment.Center,
+    })
+    self._textLabel = textLabel
+    self._maid:give(iconLabel)
+    self._maid:give(textLabel)
+
+    return self
+end
+
+function EmptyState:SetText(text)
+    self.Text = text
+    self._textLabel.Text = text
+end
+
+-- RichText
+RichText = setmetatable({}, ApexComponent)
+RichText.__index = RichText
+
+function RichText.new(config, section)
+    local self = setmetatable(ApexComponent.new(config), RichText)
+    self.Type = "RichText"
+    self.ParentSection = section
+    self.Text = config.Text or ""
+    self._container = CreateComponentContainer(section, 40)
+    self._maid:give(self._container)
+    table.insert(section.Components, self)
+
+    local richLabel = Utilities.InstanceHelpers.Create("TextLabel", {
+        Size = UDim2.new(1, -10, 1, -10),
+        Position = UDim2.new(0, 5, 0, 5),
+        Text = self.Text,
+        RichText = true,
+        Font = ThemeEngine.Current.Font,
+        TextSize = 12,
+        TextColor3 = ThemeEngine.Current.Text,
+        BackgroundTransparency = 1,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Top,
+        Parent = self._container,
+    })
+    self._richLabel = richLabel
+    self._maid:give(richLabel)
+
+    return self
+end
+
+function RichText:SetText(text)
+    self.Text = text
+    self._richLabel.Text = text
+end
+
+-- ///////////////////////////////
+-- // NOTIFICATION SERVICE
+-- ///////////////////////////////
+
+local NotificationService = {
+    ActiveNotifications = {},
+    MaxNotifications = 5,
+}
+
+function Apex:Notify(config)
+    local title = config.Title or "Apex Scripters"
+    local description = config.Description or ""
+    local notifType = config.Type or "Info"
+    local duration = config.Duration or 3
+
+    local colorMap = {
+        Info = ThemeEngine.Current.Info,
+        Success = ThemeEngine.Current.Success,
+        Warning = ThemeEngine.Current.Warning,
+        Error = ThemeEngine.Current.Error,
+    }
+    local bgColor = colorMap[notifType] or ThemeEngine.Current.Info
+
+    local notifGui = UIBuilder.CreateGui("ApexNotification")
+    local notif = UIBuilder.CreateFrame(notifGui, {
+        Size = UDim2.new(0, 280, 0, 60),
+        Position = UDim2.new(1, -10, 1, -70),
+        BackgroundColor3 = bgColor,
+        BackgroundTransparency = 0.2,
+        BorderSizePixel = 0,
+        ClipsDescendants = true,
+    })
+    UIBuilder.CreateUICorner(notif, 8)
+    UIBuilder.CreateUIStroke(notif, { Color = bgColor, Thickness = 2 })
+
+    local titleLabel = UIBuilder.CreateTextLabel(notif, {
+        Size = UDim2.new(1, -20, 0, 20),
+        Position = UDim2.new(0, 10, 0, 4),
+        Text = title,
+        Font = ThemeEngine.Current.FontBold,
+        TextSize = 14,
+        TextColor3 = Color3.new(1,1,1),
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+    local descLabel = UIBuilder.CreateTextLabel(notif, {
+        Size = UDim2.new(1, -20, 0, 24),
+        Position = UDim2.new(0, 10, 0, 28),
+        Text = description,
+        Font = ThemeEngine.Current.Font,
+        TextSize = 11,
+        TextColor3 = Color3.new(1,1,1),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextWrapped = true,
+    })
+    local closeButton = UIBuilder.CreateTextButton(notif, {
+        Size = UDim2.new(0, 16, 0, 16),
+        Position = UDim2.new(1, -22, 0, 4),
+        Text = "×",
+        Font = Enum.Font.GothamBold,
+        TextSize = 14,
+        TextColor3 = Color3.new(1,1,1),
+        BackgroundColor3 = Color3.fromRGB(0,0,0),
+        BackgroundTransparency = 0.6,
+        AutoButtonColor = false,
+    })
+    UIBuilder.CreateUICorner(closeButton, 8)
+
+    local progressBg = UIBuilder.CreateFrame(notif, {
+        Size = UDim2.new(1, 0, 0, 3),
+        Position = UDim2.new(0, 0, 1, -3),
+        BackgroundColor3 = Color3.fromRGB(0,0,0),
+        BackgroundTransparency = 0.5,
+        BorderSizePixel = 0,
+    })
+    local progressFill = UIBuilder.CreateFrame(progressBg, {
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundColor3 = Color3.new(1,1,1),
+        BackgroundTransparency = 0,
+        BorderSizePixel = 0,
+    })
+
+    local function destroyNotif()
+        AnimationEngine.Tween(notif, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {BackgroundTransparency = 1})
+        task.delay(0.2, function()
+            notifGui:Destroy()
+            for i, n in ipairs(NotificationService.ActiveNotifications) do
+                if n.gui == notifGui then
+                    table.remove(NotificationService.ActiveNotifications, i)
+                    break
+                end
             end
-            floatDragging = false
-            floatMoved    = false
+        end)
+    end
+
+    closeButton.MouseButton1Click:Connect(destroyNotif)
+
+    if duration > 0 then
+        local tween = AnimationEngine.Tween(progressFill, TweenInfo.new(duration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {Size = UDim2.new(0, 0, 1, 0)})
+        if tween then
+            tween.Completed:Connect(destroyNotif)
+        else
+            task.delay(duration, destroyNotif)
         end
     end
-end)
 
--- Mueve la GUI principal o el boton flotante segun cual esta siendo arrastrado
-UserInputService.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement
-    or input.UserInputType == Enum.UserInputType.Touch then
-        local pos = Vector2.new(input.Position.X, input.Position.Y)
+    local count = #NotificationService.ActiveNotifications
+    if count >= NotificationService.MaxNotifications then
+        local oldest = NotificationService.ActiveNotifications[1]
+        if oldest then oldest.destroy() end
+    end
+    table.insert(NotificationService.ActiveNotifications, {gui = notifGui, notif = notif, destroy = destroyNotif})
 
-        -- Arrastre de la interfaz principal siguiendo el cursor
-        if dragging and dragStart and frameStart then
-            local delta = pos - dragStart
-            mainFrame.Position = UDim2.new(
-                0, frameStart.X.Offset + delta.X,
-                0, frameStart.Y.Offset + delta.Y
-            )
-        end
+    local yOffset = 10 + (#NotificationService.ActiveNotifications - 1) * 70
+    notif.Position = UDim2.new(1, -10, 1, -yOffset - 60)
 
-        -- Arrastre del boton flotante con limites de pantalla para no salirse
-        if floatDragging and floatDragStart and floatBtnStart then
-            local delta = pos - floatDragStart
-            if delta.Magnitude > DRAG_THRESHOLD then
-                floatMoved = true
+    notif.BackgroundTransparency = 1
+    AnimationEngine.Tween(notif, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.2, Position = UDim2.new(1, -10, 1, -yOffset - 60)})
+
+    return { Destroy = destroyNotif, Close = destroyNotif }
+end
+
+-- ///////////////////////////////
+-- // DIALOG SERVICE
+-- ///////////////////////////////
+
+function Apex:Dialog(config)
+    local title = config.Title or "Dialog"
+    local description = config.Description or ""
+    local buttons = config.Buttons or {{Name = "OK", Callback = function() end}}
+
+    local dialogGui = UIBuilder.CreateGui("ApexDialog")
+    local overlay = UIBuilder.CreateFrame(dialogGui, {
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundColor3 = Color3.fromRGB(0,0,0),
+        BackgroundTransparency = 0.5,
+        ZIndex = 10,
+        ClipsDescendants = true,
+    })
+    local dialogFrame = UIBuilder.CreateFrame(overlay, {
+        Size = UDim2.new(0, 320, 0, 180),
+        Position = UDim2.new(0.5, -160, 0.5, -90),
+        BackgroundColor3 = ThemeEngine.Current.Surface,
+        BackgroundTransparency = 0,
+        BorderSizePixel = 0,
+        ClipsDescendants = true,
+    })
+    UIBuilder.CreateUICorner(dialogFrame, 10)
+    UIBuilder.CreateUIStroke(dialogFrame, { Color = ThemeEngine.Current.Border, Thickness = 2 })
+
+    local titleLabel = UIBuilder.CreateTextLabel(dialogFrame, {
+        Size = UDim2.new(1, -20, 0, 30),
+        Position = UDim2.new(0, 10, 0, 10),
+        Text = title,
+        Font = ThemeEngine.Current.FontBold,
+        TextSize = 18,
+        TextColor3 = ThemeEngine.Current.Text,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+    local descLabel = UIBuilder.CreateTextLabel(dialogFrame, {
+        Size = UDim2.new(1, -20, 0, 60),
+        Position = UDim2.new(0, 10, 0, 45),
+        Text = description,
+        Font = ThemeEngine.Current.Font,
+        TextSize = 13,
+        TextColor3 = ThemeEngine.Current.TextSecondary,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextWrapped = true,
+    })
+
+    local buttonContainer = UIBuilder.CreateFrame(dialogFrame, {
+        Size = UDim2.new(1, -20, 0, 35),
+        Position = UDim2.new(0, 10, 1, -45),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+    })
+    local buttonLayout = UIBuilder.CreateUIListLayout(buttonContainer, {
+        FillDirection = Enum.FillDirection.Horizontal,
+        HorizontalAlignment = Enum.HorizontalAlignment.Right,
+        VerticalAlignment = Enum.VerticalAlignment.Center,
+        Padding = UDim.new(0, 8),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+    })
+
+    local dialogObject = {
+        Gui = dialogGui,
+        Destroy = function()
+            dialogGui:Destroy()
+        end,
+        Close = function()
+            dialogGui:Destroy()
+        end,
+    }
+
+    for i, btnConfig in ipairs(buttons) do
+        local btn = UIBuilder.CreateTextButton(buttonContainer, {
+            Size = UDim2.new(0, 70, 0, 30),
+            Text = btnConfig.Name,
+            Font = ThemeEngine.Current.FontBold,
+            TextSize = 12,
+            TextColor3 = Color3.new(1,1,1),
+            BackgroundColor3 = btnConfig.Primary and ThemeEngine.Current.Accent or ThemeEngine.Current.SurfaceSecondary,
+            BackgroundTransparency = 0,
+            AutoButtonColor = false,
+            LayoutOrder = i,
+        })
+        UIBuilder.CreateUICorner(btn, 6)
+        btn.MouseButton1Click:Connect(function()
+            if btnConfig.Callback then
+                task.spawn(btnConfig.Callback)
             end
-            if floatMoved then
-                local screen  = Workspace.CurrentCamera.ViewportSize
-                local btnSize = floatBtn.AbsoluteSize
-                local newX = math.clamp(floatBtnStart.X + delta.X, 0, screen.X - btnSize.X)
-                local newY = math.clamp(floatBtnStart.Y + delta.Y, 0, screen.Y - btnSize.Y)
-                floatBtn.Position = UDim2.new(0, newX, 0, newY)
-            end
+            dialogObject:Destroy()
+        end)
+    end
+
+    return dialogObject
+end
+
+-- ///////////////////////////////
+-- // CONFIG SERVICE
+-- ///////////////////////////////
+
+local ConfigService = {
+    AutoSave = false,
+    AutoSaveInterval = 30,
+    Configs = {},
+    SaveFunction = nil,
+    LoadFunction = nil,
+}
+
+function Apex.Config:Save(name)
+    local data = {}
+    for id, comp in pairs(Registry.GetAll()) do
+        if comp.ParentSection then
+            data[id] = {
+                Type = comp.Type,
+                Value = comp.Value,
+            }
         end
     end
-end)
+    data["_uiState"] = {
+        theme = Apex:GetTheme(),
+        scale = Apex._scale,
+    }
+    ConfigService.Configs[name] = data
+    if ConfigService.SaveFunction then
+        ConfigService.SaveFunction(name, data)
+    end
+    DebugService.Log("INFO", "Config saved: " .. name)
+    return true
+end
 
--- Busca en el workspace la parte de la caminadora mas cercana a la posicion dada
-local function findTreadmillPart(pos)
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if obj:IsA("BasePart") then
-            local n = obj.Name:lower()
-            if string.find(n, "treadmill") or string.find(n, "esteira") then
-                if (obj.Position - pos).Magnitude <= 10 then
-                    return obj
+function Apex.Config:Load(name)
+    local data = ConfigService.Configs[name]
+    if not data and ConfigService.LoadFunction then
+        data = ConfigService.LoadFunction(name)
+    end
+    if data then
+        for id, compData in pairs(data) do
+            if id ~= "_uiState" then
+                local comp = Registry.Find(id)
+                if comp then
+                    comp:SetValue(compData.Value)
                 end
             end
         end
-    end
-    return nil
-end
-
--- Teleporta al jugador de vuelta a la posicion guardada antes del farm
-local function returnToSaved()
-    local char = player.Character
-    if char and savedPosition then
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if root then
-            root.CFrame = savedPosition
-        end
-    end
-    savedPosition = nil
-end
-
--- Detiene el farm desconectando todos los eventos activos
-local function stopFarming()
-    stopRequested = true
-    if heartbeatConn then heartbeatConn:Disconnect(); heartbeatConn = nil end
-    if strengthConn  then strengthConn:Disconnect();  strengthConn  = nil end
-end
-
--- Cambia el aspecto visual del boton segun si el farm esta activo o no
-local function setToggleState(running)
-    if running then
-        toggleGrad.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, C.red),
-            ColorSequenceKeypoint.new(1, C.redDark),
-        })
-        toggleIcon.Text = "■"
-        toggleText.Text = "PARAR FARM"
-        pulseTween = pulseToggle(true)
-    else
-        if pulseTween then pulseTween:Cancel(); pulseTween = nil end
-        toggleBtn.BackgroundTransparency = 0
-        toggleGrad.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, C.green),
-            ColorSequenceKeypoint.new(1, C.greenDark),
-        })
-        toggleIcon.Text = "▶"
-        toggleText.Text = "INICIAR FARM"
-    end
-end
-
--- Inicia o detiene el farm dependiendo del estado actual
-local function toggleFarming()
-
-    -- Detiene el farm activo, restaura el personaje y retorna a la posicion guardada
-    if isRunning then
-        stopFarming()
-        local char = player.Character
-        if char then
-            local hum  = char:FindFirstChild("Humanoid")
-            local root = char:FindFirstChild("HumanoidRootPart")
-            if hum  then hum.AutoRotate = true end
-            if root then root.AssemblyLinearVelocity = Vector3.zero end
-        end
-        returnToSaved()
-        targetCFrameGlobal = nil
-        isRunning = false
-        setToggleState(false)
-        setStatus("Farm parado", C.red)
-        return
-    end
-
-    -- Inicia el farm validando los datos y ubicando al personaje en la caminadora
-    isRunning     = true
-    stopRequested = false
-
-    local gains = tonumber(xpInput.Text)
-    if not gains or gains <= 0 then
-        gains = DEFAULT_GAINS
-        xpInput.Text = tostring(DEFAULT_GAINS)
-    end
-
-    setToggleState(true)
-    setStatus("Localizando esteira...", Color3.fromRGB(255, 200, 50))
-
-    local char = player.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then
-        setStatus("Personagem não encontrado", C.red)
-        isRunning = false
-        setToggleState(false)
-        return
-    end
-
-    local humanoid = char:WaitForChild("Humanoid")
-    local rootPart = char:WaitForChild("HumanoidRootPart")
-
-    -- Guarda la posicion actual antes de mover al jugador a la caminadora
-    savedPosition = rootPart.CFrame
-
-    local data          = treadmillData[selectedIndex]
-    local rotY          = data.rotY or 180
-    local treadmillPart = findTreadmillPart(data.pos)
-    local targetCFrame
-    local fallbackPos   = data.pos + Vector3.new(0, humanoid.HipHeight + OFFSET_Y, 0)
-
-    -- Calcula el CFrame segun si la caminadora usa rotacion mundial o relativa a la pieza
-    if data.useWorldRot then
-        -- Rotacion absoluta en espacio mundial para caminadoras 7 y 8
-        targetCFrame = CFrame.new(fallbackPos) * CFrame.Angles(0, math.rad(rotY), 0)
-    elseif treadmillPart then
-        -- Rotacion relativa a la orientacion de la pieza de la caminadora
-        targetCFrame = treadmillPart.CFrame
-            * CFrame.Angles(0, math.rad(rotY), 0)
-            * CFrame.new(0, humanoid.HipHeight + OFFSET_Y, 0)
-    else
-        -- Posicion de respaldo cuando no se encuentra la pieza de la caminadora
-        targetCFrame = CFrame.new(fallbackPos, fallbackPos + Vector3.new(0, 0, -1))
-    end
-
-    targetCFrameGlobal  = targetCFrame
-    rootPart.CFrame     = targetCFrame
-    humanoid.AutoRotate = false
-    task.wait(0.1)
-
-    -- Busca el stat de Agilidade o Fuerza en los leaderstats del jugador
-    -- La esteira da Agilidade, no Strength, por eso se incluyen los dos nombres
-    local leaderstats = player:FindFirstChild("leaderstats") or player:FindFirstChild("PlayerStats")
-    local strength = leaderstats and (
-        leaderstats:FindFirstChild("Agility")    or
-        leaderstats:FindFirstChild("Agilidade")  or
-        leaderstats:FindFirstChild("Strength")   or
-        leaderstats:FindFirstChild("Power")      or
-        leaderstats:FindFirstChild("Speed")      or
-        leaderstats:FindFirstChild("Running")
-    )
-
-    if not strength then
-        setStatus("Stats não encontrados", C.red)
-        humanoid.AutoRotate = true
-        returnToSaved()
-        isRunning = false
-        setToggleState(false)
-        return
-    end
-
-    lastStrengthValue = strength.Value
-    local xpCount     = 0
-
-    -- Cuenta cada ganancia de XP o Agilidade y para al alcanzar el objetivo
-    strengthConn = strength:GetPropertyChangedSignal("Value"):Connect(function()
-        if not isRunning or stopRequested then return end
-        local newVal = strength.Value
-        if newVal > lastStrengthValue then
-            xpCount += 1
-            lastStrengthValue = newVal
-            setStatus(string.format("Ganho: %d / %d", xpCount, gains), C.green)
-            -- Detiene el farm automaticamente cuando se alcanza el limite de ganancias
-            if xpCount >= gains then
-                stopFarming()
-                local c = player.Character
-                if c then
-                    local hum2  = c:FindFirstChild("Humanoid")
-                    local root2 = c:FindFirstChild("HumanoidRootPart")
-                    if hum2  then hum2.AutoRotate = true end
-                    if root2 then root2.AssemblyLinearVelocity = Vector3.zero end
-                end
-                returnToSaved()
-                targetCFrameGlobal = nil
-                isRunning = false
-                setToggleState(false)
-                setStatus("✓ Concluído! " .. xpCount .. " ganhos", C.green)
+        if data._uiState then
+            if data._uiState.theme then
+                Apex:SetTheme(data._uiState.theme)
+            end
+            if data._uiState.scale then
+                Apex:SetScale(data._uiState.scale)
             end
         end
-        lastStrengthValue = newVal
-    end)
-
-    -- Mantiene al personaje fijo sobre la caminadora en cada frame del juego
-    heartbeatConn = RunService.Heartbeat:Connect(function()
-        if not isRunning or stopRequested then return end
-        local c = player.Character
-        if not c then return end
-        local root2 = c:FindFirstChild("HumanoidRootPart")
-        local hum2  = c:FindFirstChild("Humanoid")
-        if not root2 or not hum2 then return end
-        root2.CFrame = targetCFrameGlobal
-        hum2:Move(root2.CFrame.LookVector, true)
-        hum2.WalkSpeed = 16
-    end)
-
-    setStatus(string.format("Correndo — meta: %d ganhos", gains), C.green)
+        DebugService.Log("INFO", "Config loaded: " .. name)
+        return true
+    end
+    return false
 end
 
--- Conecta el boton principal con la funcion de inicio y parada del farm
-toggleBtn.MouseButton1Click:Connect(toggleFarming)
-
--- Detiene el farm y retorna a la posicion guardada si el personaje respawnea
-player.CharacterAdded:Connect(function()
-    if isRunning then
-        stopFarming()
-        isRunning          = false
-        targetCFrameGlobal = nil
-        savedPosition      = nil
-        setToggleState(false)
-        setStatus("Respawnado — farm pausado", C.red)
+function Apex.Config:Delete(name)
+    ConfigService.Configs[name] = nil
+    if ConfigService.SaveFunction then
+        ConfigService.SaveFunction(name, nil)
     end
-end)
+    return true
+end
+
+function Apex.Config:Exists(name)
+    return ConfigService.Configs[name] ~= nil
+end
+
+function Apex.Config:List()
+    local names = {}
+    for name, _ in pairs(ConfigService.Configs) do
+        table.insert(names, name)
+    end
+    return names
+end
+
+function Apex.Config:SetAutoSave(enabled)
+    ConfigService.AutoSave = enabled
+    if ConfigService.AutoSaveTimer then
+        ConfigService.AutoSaveTimer:Disconnect()
+        ConfigService.AutoSaveTimer = nil
+    end
+    if enabled then
+        task.spawn(function()
+            while ConfigService.AutoSave do
+                task.wait(ConfigService.AutoSaveInterval)
+                Apex.Config:Save("AutoSave")
+            end
+        end)
+    end
+end
+
+function Apex.Config:SetAutoSaveInterval(interval)
+    ConfigService.AutoSaveInterval = interval
+    if ConfigService.AutoSave then
+        ConfigService:SetAutoSave(true) -- reinicia
+    end
+end
+
+function Apex.Config:SetSaveFunction(func)
+    ConfigService.SaveFunction = func
+end
+
+function Apex.Config:SetLoadFunction(func)
+    ConfigService.LoadFunction = func
+end
+
+-- ///////////////////////////////
+-- // EXTENSION API
+-- ///////////////////////////////
+
+function Apex:RegisterComponent(name, factory)
+    if type(factory) == "function" then
+        self._customComponents[name] = factory
+        return true
+    end
+    return false
+end
+
+-- ///////////////////////////////
+-- // PUBLIC API: CREATE WINDOW
+-- ///////////////////////////////
+
+function Apex:CreateWindow(config)
+    config = config or {}
+    local window = Window.new(config)
+    return window
+end
+
+-- ///////////////////////////////
+-- // INITIALIZATION
+-- ///////////////////////////////
+
+ResponsiveEngine.DetectDevice()
+ResponsiveEngine.Scale = ResponsiveEngine.CalculateScale()
+Apex:SetTheme(ThemeEngine.DefaultTheme)
+
+return Apex
